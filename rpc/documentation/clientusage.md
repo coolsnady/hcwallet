@@ -248,7 +248,7 @@ namespace Example
             // certificates (required by hxwallet).
             Environment.SetEnvironmentVariable("GRPC_SSL_CIPHER_SUITES", "HIGH+ECDSA");
 
-            var walletAppData = Portability.LocalAppData(Environment.OSVersion.Platform, "Dcrwallet");
+            var walletAppData = Portability.LocalAppData(Environment.OSVersion.Platform, "Hxwallet");
             var walletTlsCertFile = Path.Combine(walletAppData, "rpc.cert");
             var cert = await FileUtils.ReadFileAsync(walletTlsCertFile);
             var channel = new Channel("localhost:19111", new SslCredentials(cert));
@@ -355,10 +355,10 @@ var walletrpc = protoDescriptor.walletrpc;
 
 var certPath = '';
 if (os.platform() == 'win32') {
-  certPath = path.join(process.env.LOCALAPPDATA, 'Dcrwallet', 'rpc.cert');
+  certPath = path.join(process.env.LOCALAPPDATA, 'Hxwallet', 'rpc.cert');
 } else if (os.platform() == 'darwin') {
   certPath = path.join(process.env.HOME, 'Library', 'Application Support',
-    'Dcrwallet', 'rpc.cert');
+    'Hxwallet', 'rpc.cert');
 } else {
   certPath = path.join(process.env.HOME, '.hxwallet', 'rpc.cert');
 }
@@ -417,10 +417,10 @@ def main():
     os.environ['GRPC_SSL_CIPHER_SUITES'] = 'HIGH+ECDSA'
 
     if platform.system() == 'Windows':
-        cert_file_path = os.path.join(os.environ['LOCALAPPDATA'], "Dcrwallet", "rpc.cert")
+        cert_file_path = os.path.join(os.environ['LOCALAPPDATA'], "Hxwallet", "rpc.cert")
     elif platform.system() == 'Darwin':
         cert_file_path = os.path.join(os.environ['HOME'], 'Library', 'Application Support',
-                                      'Dcrwallet', 'rpc.cert')
+                                      'Hxwallet', 'rpc.cert')
     else:
         cert_file_path = os.path.join(os.environ['HOME'], '.hxwallet', 'rpc.cert')
 

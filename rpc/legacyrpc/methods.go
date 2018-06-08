@@ -3426,7 +3426,7 @@ func version(s *Server, icmd interface{}) (interface{}, error) {
 		resp = make(map[string]dcrjson.VersionResult)
 	}
 
-	resp["dcrwalletjsonrpcapi"] = dcrjson.VersionResult{
+	resp["hxwalletjsonrpcapi"] = dcrjson.VersionResult{
 		VersionString: jsonrpcSemverString,
 		Major:         jsonrpcSemverMajor,
 		Minor:         jsonrpcSemverMinor,

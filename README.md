@@ -172,17 +172,17 @@ RPC username and password.
 PowerShell (Installed from MSI):
 ```
 PS> cp "$env:ProgramFiles\coolsnady\Hxd\sample-hxd.conf" $env:LOCALAPPDATA\Hxd\hxd.conf
-PS> cp "$env:ProgramFiles\coolsnady\Dcrwallet\sample-hxwallet.conf" $env:LOCALAPPDATA\Dcrwallet\hxwallet.conf
+PS> cp "$env:ProgramFiles\coolsnady\Hxwallet\sample-hxwallet.conf" $env:LOCALAPPDATA\Hxwallet\hxwallet.conf
 PS> $editor $env:LOCALAPPDATA\Hxd\hxd.conf
-PS> $editor $env:LOCALAPPDATA\Dcrwallet\hxwallet.conf
+PS> $editor $env:LOCALAPPDATA\Hxwallet\hxwallet.conf
 ```
 
 PowerShell (Installed from source):
 ```
 PS> cp $env:GOPATH\src\github.com\coolsnady\hxd\sample-hxd.conf $env:LOCALAPPDATA\Hxd\hxd.conf
-PS> cp $env:GOPATH\src\github.com\coolsnady\hxwallet\sample-hxwallet.conf $env:LOCALAPPDATA\Dcrwallet\hxwallet.conf
+PS> cp $env:GOPATH\src\github.com\coolsnady\hxwallet\sample-hxwallet.conf $env:LOCALAPPDATA\Hxwallet\hxwallet.conf
 PS> $editor $env:LOCALAPPDATA\Hxd\hxd.conf
-PS> $editor $env:LOCALAPPDATA\Dcrwallet\hxwallet.conf
+PS> $editor $env:LOCALAPPDATA\Hxwallet\hxwallet.conf
 ```
 
 Linux/BSD/POSIX (Installed from source):
