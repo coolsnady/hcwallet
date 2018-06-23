@@ -14,7 +14,7 @@ import (
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
 	"github.com/coolsnady/hxd/txscript"
 	"github.com/coolsnady/hxd/wire"
-	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	hxutil "github.com/coolsnady/hxd/hxutil"
     dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
 	"github.com/coolsnady/hxwallet/apperrors"
 	"github.com/coolsnady/hxwallet/wallet/udb"
@@ -184,7 +184,7 @@ func (w *Wallet) LiveTicketHashes(chainClient *dcrrpcclient.Client, includeImmat
 // TicketHashesForVotingAddress returns the hashes of all tickets with voting
 // rights delegated to votingAddr.  This function does not return the hashes of
 // pruned tickets.
-func (w *Wallet) TicketHashesForVotingAddress(votingAddr dcrutil.Address) ([]chainhash.Hash, error) {
+func (w *Wallet) TicketHashesForVotingAddress(votingAddr hxutil.Address) ([]chainhash.Hash, error) {
 	var ticketHashes []chainhash.Hash
 	err := walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 		stakemgrNs := tx.ReadBucket(wstakemgrNamespaceKey)
@@ -220,7 +220,7 @@ func (w *Wallet) TicketHashesForVotingAddress(votingAddr dcrutil.Address) ([]cha
 // updateStakePoolInvalidTicket properly updates a previously marked Invalid pool ticket,
 // it then creates a new entry in the validly tracked pool ticket db.
 func (w *Wallet) updateStakePoolInvalidTicket(stakemgrNs walletdb.ReadWriteBucket,
-	addr dcrutil.Address, ticket *chainhash.Hash, ticketHeight int64) error {
+	addr hxutil.Address, ticket *chainhash.Hash, ticketHeight int64) error {
 
 	err := w.StakeMgr.RemoveStakePoolUserInvalTickets(stakemgrNs, addr, ticket)
 	if err != nil {
@@ -248,7 +248,7 @@ func (w *Wallet) AddTicket(ticket *wire.MsgTx) error {
 		stakemgrNs := tx.ReadWriteBucket(wstakemgrNamespaceKey)
 
 		// Insert the ticket to be tracked and voted.
-		err := w.StakeMgr.InsertSStx(stakemgrNs, dcrutil.NewTx(ticket))
+		err := w.StakeMgr.InsertSStx(stakemgrNs, hxutil.NewTx(ticket))
 		if err != nil {
 			return err
 		}

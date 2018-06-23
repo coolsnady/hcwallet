@@ -16,7 +16,7 @@ import (
 	"strings"
 
 	"github.com/decred/slog"
-	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	hxutil "github.com/coolsnady/hxd/hxutil"
 	"github.com/coolsnady/hxwallet/internal/cfgutil"
 	"github.com/coolsnady/hxwallet/netparams"
 	"github.com/coolsnady/hxwallet/ticketbuyer"
@@ -48,8 +48,8 @@ const (
 	defaultAllowHighFees       = false
 
 	// ticket buyer options
-	defaultMaxFee                    dcrutil.Amount = 1e6
-	defaultMinFee                    dcrutil.Amount = 1e5
+	defaultMaxFee                    hxutil.Amount = 1e6
+	defaultMinFee                    hxutil.Amount = 1e5
 	defaultMaxPriceScale                            = 0.0
 	defaultAvgVWAPPriceDelta                        = 2880
 	defaultMaxPerBlock                              = 1
@@ -69,8 +69,8 @@ const (
 )
 
 var (
-	dcrdDefaultCAFile  = filepath.Join(dcrutil.AppDataDir("hxd", false), "rpc.cert")
-	defaultAppDataDir  = dcrutil.AppDataDir("hxwallet", false)
+	dcrdDefaultCAFile  = filepath.Join(hxutil.AppDataDir("hxd", false), "rpc.cert")
+	defaultAppDataDir  = hxutil.AppDataDir("hxwallet", false)
 	defaultConfigFile  = filepath.Join(defaultAppDataDir, defaultConfigFilename)
 	defaultRPCKeyFile  = filepath.Join(defaultAppDataDir, "rpc.key")
 	defaultRPCCertFile = filepath.Join(defaultAppDataDir, "rpc.cert")

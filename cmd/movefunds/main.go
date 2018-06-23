@@ -30,7 +30,7 @@ import (
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
 	"github.com/coolsnady/hxd/dcrjson"
 	"github.com/coolsnady/hxd/wire"
-	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	hxutil "github.com/coolsnady/hxd/hxutil"
 )
 
 // params is the global representing the chain parameters. It is assigned
@@ -89,7 +89,7 @@ func convertJSONUnspentToOutPoints(
 
 		eop := new(extendedOutPoint)
 		eop.op = op
-		amtCast, _ := dcrutil.NewAmount(utxo.Amount)
+		amtCast, _ := hxutil.NewAmount(utxo.Amount)
 		eop.amt = int64(amtCast)
 		eop.pkScript = pks
 
@@ -145,7 +145,7 @@ func main() {
 
 	maxTxSize = params.MaxTxSize
 
-	sendToAddress, err := dcrutil.DecodeAddress(cfg.SendToAddress)
+	sendToAddress, err := hxutil.DecodeAddress(cfg.SendToAddress)
 	if err != nil {
 		fmt.Println("Failed to parse tx address: ", err.Error())
 	}

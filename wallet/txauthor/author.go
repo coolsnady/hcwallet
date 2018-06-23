@@ -13,7 +13,7 @@ import (
 	"github.com/coolsnady/hxd/chaincfg/chainec"
 	"github.com/coolsnady/hxd/txscript"
 	"github.com/coolsnady/hxd/wire"
-	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	hxutil "github.com/coolsnady/hxd/hxutil"
 	"github.com/coolsnady/hxwallet/wallet/txrules"
 
 	h "github.com/coolsnady/hxwallet/internal/helpers"
@@ -36,7 +36,7 @@ const (
 // can not be satisified, this can be signaled by returning a total amount less
 // than the target or by returning a more detailed error implementing
 // InputSourceError.
-type InputSource func(target dcrutil.Amount) (total dcrutil.Amount,
+type InputSource func(target hxutil.Amount) (total hxutil.Amount,
 	inputs []*wire.TxIn, scripts [][]byte, err error)
 
 // InputSourceError describes the failure to provide enough input value from
@@ -66,7 +66,7 @@ func (InsufficientFundsError) Error() string {
 type AuthoredTx struct {
 	Tx                           *wire.MsgTx
 	PrevScripts                  [][]byte
-	TotalInput                   dcrutil.Amount
+	TotalInput                   hxutil.Amount
 	ChangeIndex                  int // negative if no change
 	EstimatedSignedSerializeSize int
 }
@@ -95,7 +95,7 @@ type ChangeSource func() ([]byte, uint16, error)
 // InputSourceError is returned.
 //
 // BUGS: Fee estimation may be off when redeeming non-compressed P2PKH outputs.
-func NewUnsignedTransaction(outputs []*wire.TxOut, relayFeePerKb dcrutil.Amount,
+func NewUnsignedTransaction(outputs []*wire.TxOut, relayFeePerKb hxutil.Amount,
 	fetchInputs InputSource, fetchChange ChangeSource, accType uint8) (*AuthoredTx, error) {
 
 	targetAmount := h.SumOutputValues(outputs)

@@ -9,17 +9,17 @@ import (
 	"strconv"
 	"strings"
 
-	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	hxutil "github.com/coolsnady/hxd/hxutil"
 )
 
-// AmountFlag embeds a dcrutil.Amount and implements the flags.Marshaler and
+// AmountFlag embeds a hxutil.Amount and implements the flags.Marshaler and
 // Unmarshaler interfaces so it can be used as a config struct field.
 type AmountFlag struct {
-	dcrutil.Amount
+	hxutil.Amount
 }
 
-// NewAmountFlag creates an AmountFlag with a default dcrutil.Amount.
-func NewAmountFlag(defaultValue dcrutil.Amount) *AmountFlag {
+// NewAmountFlag creates an AmountFlag with a default hxutil.Amount.
+func NewAmountFlag(defaultValue hxutil.Amount) *AmountFlag {
 	return &AmountFlag{defaultValue}
 }
 
@@ -35,7 +35,7 @@ func (a *AmountFlag) UnmarshalFlag(value string) error {
 	if err != nil {
 		return err
 	}
-	amount, err := dcrutil.NewAmount(valueF64)
+	amount, err := hxutil.NewAmount(valueF64)
 	if err != nil {
 		return err
 	}

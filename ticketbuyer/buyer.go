@@ -14,7 +14,7 @@ import (
 	"github.com/coolsnady/hxd/blockchain"
 	"github.com/coolsnady/hxd/chaincfg"
 	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
-	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	hxutil "github.com/coolsnady/hxd/hxutil"
 	"github.com/coolsnady/hxwallet/wallet"
 )
 
@@ -72,10 +72,10 @@ type Config struct {
 	MaxPriceAbsolute          int64
 	MaxPriceRelative          float64
 	MaxInMempool              int
-	PoolAddress               dcrutil.Address
+	PoolAddress               hxutil.Address
 	PoolFees                  float64
 	NoSpreadTicketPurchases   bool
-	TicketAddress             dcrutil.Address
+	TicketAddress             hxutil.Address
 	TxFee                     int64
 }
 
@@ -87,28 +87,28 @@ type TicketPurchaser struct {
 	activeNet        *chaincfg.Params
 	dcrdChainSvr     *dcrrpcclient.Client
 	wallet           *wallet.Wallet
-	ticketAddress    dcrutil.Address
-	poolAddress      dcrutil.Address
+	ticketAddress    hxutil.Address
+	poolAddress      hxutil.Address
 	firstStart       bool
 	windowPeriod     int          // The current window period
 	idxDiffPeriod    int          // Relative block index within the difficulty period
 	useMedian        bool         // Flag for using median for ticket fees
 	priceMode        avgPriceMode // Price mode to use to calc average price
 	heightCheck      map[int64]struct{}
-	ticketPrice      dcrutil.Amount
+	ticketPrice      hxutil.Amount
 	stakePoolSize    uint32
 	stakeLive        uint32
 	stakeImmature    uint32
-	stakeVoteSubsidy dcrutil.Amount
+	stakeVoteSubsidy hxutil.Amount
 
 	// purchaserMtx protects the following runtime configurable options.
 	purchaserMtx      sync.Mutex
 	account           uint32
-	balanceToMaintain dcrutil.Amount
-	maxPriceAbsolute  dcrutil.Amount
+	balanceToMaintain hxutil.Amount
+	maxPriceAbsolute  hxutil.Amount
 	maxPriceRelative  float64
-	maxFee            dcrutil.Amount
-	minFee            dcrutil.Amount
+	maxFee            hxutil.Amount
+	minFee            hxutil.Amount
 	poolFees          float64
 	maxPerBlock       int
 	maxInMempool      int
@@ -173,7 +173,7 @@ func (t *TicketPurchaser) SetAccount(account uint32) {
 }
 
 // BalanceToMaintain returns the balance to be maintained in the wallet.
-func (t *TicketPurchaser) BalanceToMaintain() dcrutil.Amount {
+func (t *TicketPurchaser) BalanceToMaintain() hxutil.Amount {
 	t.purchaserMtx.Lock()
 	balanceToMaintain := t.balanceToMaintain
 	t.purchaserMtx.Unlock()
@@ -183,12 +183,12 @@ func (t *TicketPurchaser) BalanceToMaintain() dcrutil.Amount {
 // SetBalanceToMaintain sets the balance to be maintained in the wallet.
 func (t *TicketPurchaser) SetBalanceToMaintain(balanceToMaintain int64) {
 	t.purchaserMtx.Lock()
-	t.balanceToMaintain = dcrutil.Amount(balanceToMaintain)
+	t.balanceToMaintain = hxutil.Amount(balanceToMaintain)
 	t.purchaserMtx.Unlock()
 }
 
 // MaxPriceAbsolute returns the max absolute price to purchase a ticket.
-func (t *TicketPurchaser) MaxPriceAbsolute() dcrutil.Amount {
+func (t *TicketPurchaser) MaxPriceAbsolute() hxutil.Amount {
 	t.purchaserMtx.Lock()
 	maxPriceAbsolute := t.maxPriceAbsolute
 	t.purchaserMtx.Unlock()
@@ -198,7 +198,7 @@ func (t *TicketPurchaser) MaxPriceAbsolute() dcrutil.Amount {
 // SetMaxPriceAbsolute sets the max absolute price to purchase a ticket.
 func (t *TicketPurchaser) SetMaxPriceAbsolute(maxPriceAbsolute int64) {
 	t.purchaserMtx.Lock()
-	t.maxPriceAbsolute = dcrutil.Amount(maxPriceAbsolute)
+	t.maxPriceAbsolute = hxutil.Amount(maxPriceAbsolute)
 	t.purchaserMtx.Unlock()
 }
 
@@ -219,7 +219,7 @@ func (t *TicketPurchaser) SetMaxPriceRelative(maxPriceRelative float64) {
 }
 
 // MaxFee returns the max ticket fee per KB to use when purchasing tickets.
-func (t *TicketPurchaser) MaxFee() dcrutil.Amount {
+func (t *TicketPurchaser) MaxFee() hxutil.Amount {
 	t.purchaserMtx.Lock()
 	maxFee := t.maxFee
 	t.purchaserMtx.Unlock()
@@ -229,12 +229,12 @@ func (t *TicketPurchaser) MaxFee() dcrutil.Amount {
 // SetMaxFee sets the max ticket fee per KB to use when purchasing tickets.
 func (t *TicketPurchaser) SetMaxFee(maxFee int64) {
 	t.purchaserMtx.Lock()
-	t.maxFee = dcrutil.Amount(maxFee)
+	t.maxFee = hxutil.Amount(maxFee)
 	t.purchaserMtx.Unlock()
 }
 
 // MinFee returns the min ticket fee per KB to use when purchasing tickets.
-func (t *TicketPurchaser) MinFee() dcrutil.Amount {
+func (t *TicketPurchaser) MinFee() hxutil.Amount {
 	t.purchaserMtx.Lock()
 	minFee := t.minFee
 	t.purchaserMtx.Unlock()
@@ -244,12 +244,12 @@ func (t *TicketPurchaser) MinFee() dcrutil.Amount {
 // SetMinFee sets the min ticket fee per KB to use when purchasing tickets.
 func (t *TicketPurchaser) SetMinFee(minFee int64) {
 	t.purchaserMtx.Lock()
-	t.minFee = dcrutil.Amount(minFee)
+	t.minFee = hxutil.Amount(minFee)
 	t.purchaserMtx.Unlock()
 }
 
 // TicketAddress returns the address to send ticket outputs to.
-func (t *TicketPurchaser) TicketAddress() dcrutil.Address {
+func (t *TicketPurchaser) TicketAddress() hxutil.Address {
 	t.purchaserMtx.Lock()
 	ticketAddress := t.ticketAddress
 	t.purchaserMtx.Unlock()
@@ -257,14 +257,14 @@ func (t *TicketPurchaser) TicketAddress() dcrutil.Address {
 }
 
 // SetTicketAddress sets the address to send ticket outputs to.
-func (t *TicketPurchaser) SetTicketAddress(ticketAddress dcrutil.Address) {
+func (t *TicketPurchaser) SetTicketAddress(ticketAddress hxutil.Address) {
 	t.purchaserMtx.Lock()
 	t.ticketAddress = ticketAddress
 	t.purchaserMtx.Unlock()
 }
 
 // PoolAddress returns the pool address where ticket fees are sent.
-func (t *TicketPurchaser) PoolAddress() dcrutil.Address {
+func (t *TicketPurchaser) PoolAddress() hxutil.Address {
 	t.purchaserMtx.Lock()
 	poolAddress := t.poolAddress
 	t.purchaserMtx.Unlock()
@@ -272,7 +272,7 @@ func (t *TicketPurchaser) PoolAddress() dcrutil.Address {
 }
 
 // SetPoolAddress sets the pool address where ticket fees are sent.
-func (t *TicketPurchaser) SetPoolAddress(poolAddress dcrutil.Address) {
+func (t *TicketPurchaser) SetPoolAddress(poolAddress hxutil.Address) {
 	t.purchaserMtx.Lock()
 	t.poolAddress = poolAddress
 	t.purchaserMtx.Unlock()
@@ -369,11 +369,11 @@ func NewTicketPurchaser(cfg *Config,
 		heightCheck:   make(map[int64]struct{}),
 
 		account:           account,
-		balanceToMaintain: dcrutil.Amount(cfg.BalanceToMaintainAbsolute),
-		maxFee:            dcrutil.Amount(cfg.MaxFee),
-		minFee:            dcrutil.Amount(cfg.MinFee),
+		balanceToMaintain: hxutil.Amount(cfg.BalanceToMaintainAbsolute),
+		maxFee:            hxutil.Amount(cfg.MaxFee),
+		minFee:            hxutil.Amount(cfg.MinFee),
 		maxPerBlock:       cfg.MaxPerBlock,
-		maxPriceAbsolute:  dcrutil.Amount(cfg.MaxPriceAbsolute),
+		maxPriceAbsolute:  hxutil.Amount(cfg.MaxPriceAbsolute),
 		maxPriceRelative:  cfg.MaxPriceRelative,
 		poolFees:          cfg.PoolFees,
 		maxInMempool:      cfg.MaxInMempool,
@@ -385,13 +385,13 @@ func NewTicketPurchaser(cfg *Config,
 type PurchaseStats struct {
 	Height        int64
 	PriceMaxScale float64
-	PriceAverage  dcrutil.Amount
-	PriceNext     dcrutil.Amount
-	PriceCurrent  dcrutil.Amount
+	PriceAverage  hxutil.Amount
+	PriceNext     hxutil.Amount
+	PriceCurrent  hxutil.Amount
 	Purchased     int
 	LeftWindow    int
-	Balance       dcrutil.Amount
-	TicketPrice   dcrutil.Amount
+	Balance       hxutil.Amount
+	TicketPrice   hxutil.Amount
 }
 
 // Purchase is the main handler for purchasing tickets for the user.
@@ -418,7 +418,7 @@ func (t *TicketPurchaser) Purchase(height int64) (*PurchaseStats, error) {
 	if t.firstStart {
 		t.firstStart = false
 		log.Debugf("First run for ticket buyer")
-		log.Debugf("Transaction relay fee: %v", dcrutil.Amount(t.cfg.TxFee))
+		log.Debugf("Transaction relay fee: %v", hxutil.Amount(t.cfg.TxFee))
 		refreshStakeInfo = true
 	} else {
 		if nextIdxDiffPeriod == 0 {
@@ -463,7 +463,7 @@ func (t *TicketPurchaser) Purchase(height int64) (*PurchaseStats, error) {
 
 		subsidyCache := blockchain.NewSubsidyCache(height, t.wallet.ChainParams())
 		subsidy := blockchain.CalcStakeVoteSubsidy(subsidyCache, height, t.wallet.ChainParams())
-		t.stakeVoteSubsidy = dcrutil.Amount(subsidy)
+		t.stakeVoteSubsidy = hxutil.Amount(subsidy)
 		log.Tracef("Stake vote subsidy: %v", t.stakeVoteSubsidy)
 	}
 
@@ -485,8 +485,8 @@ func (t *TicketPurchaser) Purchase(height int64) (*PurchaseStats, error) {
 		return ps, fmt.Errorf("Failed to calculate average ticket "+
 			" price amount at height %v: %v", height, err)
 	}
-	if avgPriceAmt < dcrutil.Amount(t.activeNet.MinimumStakeDiff) {
-		avgPriceAmt = dcrutil.Amount(t.activeNet.MinimumStakeDiff)
+	if avgPriceAmt < hxutil.Amount(t.activeNet.MinimumStakeDiff) {
+		avgPriceAmt = hxutil.Amount(t.activeNet.MinimumStakeDiff)
 	}
 
 	log.Debugf("Calculated average ticket price: %v", avgPriceAmt)
@@ -503,7 +503,7 @@ func (t *TicketPurchaser) Purchase(height int64) (*PurchaseStats, error) {
 
 	sDiffEsts, err := t.dcrdChainSvr.EstimateStakeDiff(nil)
 	if err == nil {
-		ps.PriceNext, err = dcrutil.NewAmount(sDiffEsts.Expected)
+		ps.PriceNext, err = hxutil.NewAmount(sDiffEsts.Expected)
 		if err != nil {
 			return ps, err
 		}
@@ -514,7 +514,7 @@ func (t *TicketPurchaser) Purchase(height int64) (*PurchaseStats, error) {
 
 	// Set the max price to the configuration parameter that is lower
 	// Absolute or relative max price
-	var maxPriceAmt dcrutil.Amount
+	var maxPriceAmt hxutil.Amount
 	maxPriceAbs := t.MaxPriceAbsolute()
 
 	if maxPriceAbs > 0 &&
@@ -583,7 +583,7 @@ func (t *TicketPurchaser) Purchase(height int64) (*PurchaseStats, error) {
 	}
 	log.Tracef("All tickets in mempool: %v", mempoolall)
 
-	var feeToUse dcrutil.Amount
+	var feeToUse hxutil.Amount
 	maxStake := int(t.activeNet.MaxFreshStakePerBlock)
 	if ticketPurchasesInLastBlock < maxStake && mempoolall < maxStake {
 		feeToUse = t.MinFee()
@@ -598,7 +598,7 @@ func (t *TicketPurchaser) Purchase(height int64) (*PurchaseStats, error) {
 		// If might be the case that there weren't enough recent
 		// blocks to average fees from. Use data from the last
 		// window with the closest difficulty.
-		var chainFee dcrutil.Amount
+		var chainFee hxutil.Amount
 		if t.idxDiffPeriod < t.cfg.BlocksToAvg {
 			chainFee, err = t.findClosestFeeWindows(nextStakeDiff,
 				t.useMedian)
@@ -772,7 +772,7 @@ func (t *TicketPurchaser) Purchase(height int64) (*PurchaseStats, error) {
 	// If there is not enough money, decrement and recheck the balance
 	// to see if fewer tickets may be purchased. Abort if we don't
 	// have enough moneys.
-	notEnough := func(bal dcrutil.Amount, toBuy int, sd dcrutil.Amount) bool {
+	notEnough := func(bal hxutil.Amount, toBuy int, sd hxutil.Amount) bool {
 		return (bal.ToCoin() - float64(toBuy)*sd.ToCoin()) <
 			balanceToMaintainAmt
 	}
@@ -815,7 +815,7 @@ func (t *TicketPurchaser) Purchase(height int64) (*PurchaseStats, error) {
 	}
 
 	// Purchase tickets.
-	poolFeesAmt, err := dcrutil.NewAmount(t.cfg.PoolFees)
+	poolFeesAmt, err := hxutil.NewAmount(t.cfg.PoolFees)
 	if err != nil {
 		return ps, err
 	}

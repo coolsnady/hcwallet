@@ -15,7 +15,7 @@ import (
 	"github.com/coolsnady/hxd/chaincfg"
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
 	"github.com/coolsnady/hxd/wire"
-	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	hxutil "github.com/coolsnady/hxd/hxutil"
 	"github.com/coolsnady/hxwallet/walletdb"
 	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
 )
@@ -54,7 +54,7 @@ func setup() (db walletdb.DB, s *Store, teardown func(), err error) {
 	if err != nil {
 		return
 	}
-	acctLookup := func(walletdb.ReadBucket, dcrutil.Address) (uint32, error) { return 0, nil }
+	acctLookup := func(walletdb.ReadBucket, hxutil.Address) (uint32, error) { return 0, nil }
 	s = &Store{chainParams: &chaincfg.TestNet2Params, acctLookupFunc: acctLookup}
 	return
 }

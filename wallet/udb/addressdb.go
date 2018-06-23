@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"time"
 
-	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	hxutil "github.com/coolsnady/hxd/hxutil"
 	"github.com/coolsnady/hxwallet/apperrors"
 	"github.com/coolsnady/hxwallet/walletdb"
 )
@@ -1092,16 +1092,16 @@ func fetchBlissAddress(ns walletdb.ReadBucket, account, branch, index uint32) []
 	return addrpubkeyHash
 }
 
-func fetchBlissAddresses(ns walletdb.ReadBucket, account, branch, start, count uint32) ([]dcrutil.Address, error) {
-	addresses := make([]dcrutil.Address, 0, count)
+func fetchBlissAddresses(ns walletdb.ReadBucket, account, branch, start, count uint32) ([]hxutil.Address, error) {
+	addresses := make([]hxutil.Address, 0, count)
 	for i := uint32(start); i < count; i++ {
 		blissaddr := fetchBlissAddress(ns, account, branch, i)
 		blisspubkeyaddrstr := string(blissaddr)
-		pubkeyhash, err := dcrutil.DecodeAddress(blisspubkeyaddrstr)
+		pubkeyhash, err := hxutil.DecodeAddress(blisspubkeyaddrstr)
 		if err != nil {
 			return nil, err
 		}
-		addr, ok := pubkeyhash.(*dcrutil.AddressPubKeyHash)
+		addr, ok := pubkeyhash.(*hxutil.AddressPubKeyHash)
 
 		if !ok {
 			return nil, fmt.Errorf("wrong rawaddr type error")
@@ -1131,7 +1131,7 @@ func putAddress(ns walletdb.ReadWriteBucket, addressID []byte, row *dbAddressRow
 
 // putChainedAddress stores the provided chained address information to the
 // database.
-func putChainedAddress(ns walletdb.ReadWriteBucket, addr *dcrutil.AddressPubKeyHash, account uint32,
+func putChainedAddress(ns walletdb.ReadWriteBucket, addr *hxutil.AddressPubKeyHash, account uint32,
 	status syncStatus, branch, index uint32) error {
 
 	addressID := addr.Hash160()[:]
@@ -1636,7 +1636,7 @@ func upgradeManager(ns walletdb.ReadWriteBucket) error {
 	return nil
 }
 
-func PutChainedBlissAddress(ns walletdb.ReadWriteBucket, addr *dcrutil.AddressPubKeyHash, account uint32,
+func PutChainedBlissAddress(ns walletdb.ReadWriteBucket, addr *hxutil.AddressPubKeyHash, account uint32,
 	status syncStatus, branch, index uint32) error {
 	return putChainedAddress(ns, addr, account, status, branch, index)
 }

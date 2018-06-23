@@ -11,7 +11,7 @@ import (
 	"github.com/coolsnady/hxd/blockchain/stake"
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
 	"github.com/coolsnady/hxd/wire"
-	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	hxutil "github.com/coolsnady/hxd/hxutil"
 	"github.com/coolsnady/hxwallet/apperrors"
 	"github.com/coolsnady/hxwallet/walletdb"
 )
@@ -21,7 +21,7 @@ import (
 // with the Index field.
 type CreditRecord struct {
 	Index      uint32
-	Amount     dcrutil.Amount
+	Amount     hxutil.Amount
 	Spent      bool
 	Change     bool
 	OpCode     uint8
@@ -32,7 +32,7 @@ type CreditRecord struct {
 // transaction.  Further details may be looked up by indexing a wire.MsgTx.TxIn
 // with the Index field.
 type DebitRecord struct {
-	Amount dcrutil.Amount
+	Amount hxutil.Amount
 	Index  uint32
 }
 

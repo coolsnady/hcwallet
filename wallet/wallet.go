@@ -29,7 +29,7 @@ import (
 	"github.com/coolsnady/hxd/txscript"
 	"github.com/coolsnady/hxd/wire"
 	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
-	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	hxutil "github.com/coolsnady/hxd/hxutil"
 	"github.com/coolsnady/hxd/hdkeychain"
 	"github.com/coolsnady/hxwallet/apperrors"
 	"github.com/coolsnady/hxwallet/chain"
@@ -86,8 +86,8 @@ type Wallet struct {
 	voteBits                stake.VoteBits
 	ticketPurchasingEnabled bool
 	votingEnabled           bool
-	balanceToMaintain       dcrutil.Amount
-	poolAddress             dcrutil.Address
+	balanceToMaintain       hxutil.Amount
+	poolAddress             hxutil.Address
 	poolFees                float64
 	stakePoolEnabled        bool
 	stakePoolColdAddrs      map[string]struct{}
@@ -102,10 +102,10 @@ type Wallet struct {
 
 	lockedOutpoints map[wire.OutPoint]struct{}
 
-	relayFee               dcrutil.Amount
+	relayFee               hxutil.Amount
 	relayFeeMu             sync.Mutex
 	ticketFeeIncrementLock sync.Mutex
-	ticketFeeIncrement     dcrutil.Amount
+	ticketFeeIncrement     hxutil.Amount
 	DisallowFree           bool
 	AllowHighFees          bool
 
@@ -122,7 +122,7 @@ type Wallet struct {
 
 	// Internal address handling.
 	addressReuse     bool
-	ticketAddress    dcrutil.Address
+	ticketAddress    hxutil.Address
 	addressBuffers   map[uint32]*bip0044AccountData
 	addressBuffersMu sync.Mutex
 
@@ -152,8 +152,8 @@ type Wallet struct {
 
 // newWallet creates a new Wallet structure with the provided address manager
 // and transaction store.
-func newWallet(votingEnabled bool, addressReuse bool, ticketAddress dcrutil.Address,
-	poolAddress dcrutil.Address, pf float64, relayFee, ticketFee dcrutil.Amount,
+func newWallet(votingEnabled bool, addressReuse bool, ticketAddress hxutil.Address,
+	poolAddress hxutil.Address, pf float64, relayFee, ticketFee hxutil.Amount,
 	gapLimit int, stakePoolColdAddrs map[string]struct{}, AllowHighFees bool,
 	mgr *udb.Manager, txs *udb.Store, smgr *udb.StakeStore, db *walletdb.DB,
 	params *chaincfg.Params, privpass []byte) (*Wallet, error) {
@@ -280,7 +280,7 @@ func newWallet(votingEnabled bool, addressReuse bool, ticketAddress dcrutil.Addr
 }
 
 // StakeDifficulty is used to get the current stake difficulty from the daemon.
-func (w *Wallet) StakeDifficulty() (dcrutil.Amount, error) {
+func (w *Wallet) StakeDifficulty() (hxutil.Amount, error) {
 	chainClient, err := w.requireChainClient()
 	if err != nil {
 		return 0, err
@@ -291,7 +291,7 @@ func (w *Wallet) StakeDifficulty() (dcrutil.Amount, error) {
 		return 0, err
 	}
 
-	sd, err := dcrutil.NewAmount(sdResp.NextStakeDifficulty)
+	sd, err := hxutil.NewAmount(sdResp.NextStakeDifficulty)
 	if err != nil {
 		return 0, err
 	}
@@ -300,7 +300,7 @@ func (w *Wallet) StakeDifficulty() (dcrutil.Amount, error) {
 }
 
 // BalanceToMaintain is used to get the current balancetomaintain for the wallet.
-func (w *Wallet) BalanceToMaintain() dcrutil.Amount {
+func (w *Wallet) BalanceToMaintain() hxutil.Amount {
 	w.stakeSettingsLock.Lock()
 	balance := w.balanceToMaintain
 	w.stakeSettingsLock.Unlock()
@@ -309,7 +309,7 @@ func (w *Wallet) BalanceToMaintain() dcrutil.Amount {
 }
 
 // SetBalanceToMaintain is used to set the current w.balancetomaintain for the wallet.
-func (w *Wallet) SetBalanceToMaintain(balance dcrutil.Amount) {
+func (w *Wallet) SetBalanceToMaintain(balance hxutil.Amount) {
 	w.stakeSettingsLock.Lock()
 	w.balanceToMaintain = balance
 	w.stakeSettingsLock.Unlock()
@@ -515,12 +515,12 @@ func (w *Wallet) SetTicketPurchasingEnabled(flag bool) {
 
 // TicketAddress gets the ticket address for the wallet to give the ticket
 // voting rights to.
-func (w *Wallet) TicketAddress() dcrutil.Address {
+func (w *Wallet) TicketAddress() hxutil.Address {
 	return w.ticketAddress
 }
 
 // PoolAddress gets the pool address for the wallet to give ticket fees to.
-func (w *Wallet) PoolAddress() dcrutil.Address {
+func (w *Wallet) PoolAddress() hxutil.Address {
 	return w.poolAddress
 }
 
@@ -675,7 +675,7 @@ func (w *Wallet) ChainClient() *dcrrpcclient.Client {
 
 // RelayFee returns the current minimum relay fee (per kB of serialized
 // transaction) used when constructing transactions.
-func (w *Wallet) RelayFee() dcrutil.Amount {
+func (w *Wallet) RelayFee() hxutil.Amount {
 	w.relayFeeMu.Lock()
 	relayFee := w.relayFee
 	w.relayFeeMu.Unlock()
@@ -684,14 +684,14 @@ func (w *Wallet) RelayFee() dcrutil.Amount {
 
 // SetRelayFee sets a new minimum relay fee (per kB of serialized
 // transaction) used when constructing transactions.
-func (w *Wallet) SetRelayFee(relayFee dcrutil.Amount) {
+func (w *Wallet) SetRelayFee(relayFee hxutil.Amount) {
 	w.relayFeeMu.Lock()
 	w.relayFee = relayFee
 	w.relayFeeMu.Unlock()
 }
 
 // TicketFeeIncrement is used to get the current feeIncrement for the wallet.
-func (w *Wallet) TicketFeeIncrement() dcrutil.Amount {
+func (w *Wallet) TicketFeeIncrement() hxutil.Amount {
 	w.ticketFeeIncrementLock.Lock()
 	fee := w.ticketFeeIncrement
 	w.ticketFeeIncrementLock.Unlock()
@@ -700,7 +700,7 @@ func (w *Wallet) TicketFeeIncrement() dcrutil.Amount {
 }
 
 // SetTicketFeeIncrement is used to set the current w.ticketFeeIncrement for the wallet.
-func (w *Wallet) SetTicketFeeIncrement(fee dcrutil.Amount) {
+func (w *Wallet) SetTicketFeeIncrement(fee hxutil.Amount) {
 	w.ticketFeeIncrementLock.Lock()
 	w.ticketFeeIncrement = fee
 	w.ticketFeeIncrementLock.Unlock()
@@ -786,9 +786,9 @@ func (w *Wallet) MainChainTip() (hash chainhash.Hash, height int32) {
 // transaction notifications.  For logging purposes, it returns the total number
 // of addresses loaded.
 func (w *Wallet) loadActiveAddrs(dbtx walletdb.ReadTx, chainClient *dcrrpcclient.Client) (uint64, error) {
-	pool := sync.Pool{New: func() interface{} { return make([]dcrutil.Address, 0, 256) }}
-	recycleAddrs := func(addrs []dcrutil.Address) { pool.Put(addrs[:0]) }
-	getAddrs := func() []dcrutil.Address { return pool.Get().([]dcrutil.Address) }
+	pool := sync.Pool{New: func() interface{} { return make([]hxutil.Address, 0, 256) }}
+	recycleAddrs := func(addrs []hxutil.Address) { pool.Put(addrs[:0]) }
+	getAddrs := func() []hxutil.Address { return pool.Get().([]hxutil.Address) }
 
 	// loadBranchAddrs loads addresses for the branch with the child range [0,n].
 	loadBranchAddrs := func(branchKey *hdkeychain.ExtendedKey, n uint32, errs chan<- error) {
@@ -832,7 +832,7 @@ func (w *Wallet) loadActiveAddrs(dbtx walletdb.ReadTx, chainClient *dcrrpcclient
 				addrs := getAddrs()
 				stop := minUint32(n+1, child+256)
 				for ; child < stop; child++ {
-					var addr *dcrutil.AddressPubKeyHash
+					var addr *hxutil.AddressPubKeyHash
 					err := walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 						addrmgrNs := tx.ReadBucket(waddrmgrNamespaceKey)
 						var err error
@@ -931,7 +931,7 @@ func (w *Wallet) loadActiveAddrs(dbtx walletdb.ReadTx, chainClient *dcrrpcclient
 	go func() {
 		// Imported addresses are still sent as a single slice for now.  Could
 		// use the optimization above to avoid appends and reallocations.
-		var addrs []dcrutil.Address
+		var addrs []hxutil.Address
 		err := w.Manager.ForEachAccountAddress(addrmgrNs, udb.ImportedAddrAccount,
 			func(a udb.ManagedAddress) error {
 				addrs = append(addrs, a.Address())
@@ -1231,7 +1231,7 @@ type (
 	consolidateRequest struct {
 		inputs  int
 		account uint32
-		address dcrutil.Address
+		address hxutil.Address
 		resp    chan consolidateResponse
 	}
 	createTxRequest struct {
@@ -1242,15 +1242,15 @@ type (
 	}
 	createMultisigTxRequest struct {
 		account   uint32
-		amount    dcrutil.Amount
-		pubkeys   []*dcrutil.AddressSecpPubKey
+		amount    hxutil.Amount
+		pubkeys   []*hxutil.AddressSecpPubKey
 		nrequired int8
 		minconf   int32
 		resp      chan createMultisigTxResponse
 	}
 	createSStxRequest struct {
 		usedInputs []udb.Credit
-		pair       map[string]dcrutil.Amount
+		pair       map[string]hxutil.Amount
 		couts      []dcrjson.SStxCommitOut
 		inputs     []dcrjson.SStxInput
 		minconf    int32
@@ -1268,17 +1268,17 @@ type (
 		resp       chan createSSRtxResponse
 	}
 	purchaseTicketRequest struct {
-		minBalance  dcrutil.Amount
-		spendLimit  dcrutil.Amount
+		minBalance  hxutil.Amount
+		spendLimit  hxutil.Amount
 		minConf     int32
-		ticketAddr  dcrutil.Address
+		ticketAddr  hxutil.Address
 		account     uint32
 		numTickets  int
-		poolAddress dcrutil.Address
+		poolAddress hxutil.Address
 		poolFees    float64
 		expiry      int32
-		txFee       dcrutil.Amount
-		ticketFee   dcrutil.Amount
+		txFee       hxutil.Amount
+		ticketFee   hxutil.Amount
 		resp        chan purchaseTicketResponse
 	}
 
@@ -1292,7 +1292,7 @@ type (
 	}
 	createMultisigTxResponse struct {
 		tx           *CreatedTx
-		address      dcrutil.Address
+		address      hxutil.Address
 		redeemScript []byte
 		err          error
 	}
@@ -1420,7 +1420,7 @@ out:
 // If that many UTXOs can not be found, it will use the maximum it finds. This
 // will only compress UTXOs in the default account
 func (w *Wallet) Consolidate(inputs int, account uint32,
-	address dcrutil.Address) (*chainhash.Hash, error) {
+	address hxutil.Address) (*chainhash.Hash, error) {
 	req := consolidateRequest{
 		inputs:  inputs,
 		account: account,
@@ -1454,9 +1454,9 @@ func (w *Wallet) CreateSimpleTx(account uint32, outputs []*wire.TxOut,
 
 // CreateMultisigTx receives a request from the RPC and ships it to txCreator to
 // generate a new multisigtx.
-func (w *Wallet) CreateMultisigTx(account uint32, amount dcrutil.Amount,
-	pubkeys []*dcrutil.AddressSecpPubKey, nrequired int8,
-	minconf int32) (*CreatedTx, dcrutil.Address, []byte, error) {
+func (w *Wallet) CreateMultisigTx(account uint32, amount hxutil.Amount,
+	pubkeys []*hxutil.AddressSecpPubKey, nrequired int8,
+	minconf int32) (*CreatedTx, hxutil.Address, []byte, error) {
 
 	req := createMultisigTxRequest{
 		account:   account,
@@ -1473,7 +1473,7 @@ func (w *Wallet) CreateMultisigTx(account uint32, amount dcrutil.Amount,
 
 // CreateSStxTx receives a request from the RPC and ships it to txCreator to
 // generate a new SStx.
-func (w *Wallet) CreateSStxTx(pair map[string]dcrutil.Amount,
+func (w *Wallet) CreateSStxTx(pair map[string]hxutil.Amount,
 	usedInputs []udb.Credit,
 	inputs []dcrjson.SStxInput,
 	couts []dcrjson.SStxCommitOut,
@@ -1527,10 +1527,10 @@ func (w *Wallet) CreateSSRtx(ticketHash chainhash.Hash) (*CreatedTx, error) {
 // PurchaseTickets receives a request from the RPC and ships it to txCreator
 // to purchase a new ticket. It returns a slice of the hashes of the purchased
 // tickets.
-func (w *Wallet) PurchaseTickets(minBalance, spendLimit dcrutil.Amount,
-	minConf int32, ticketAddr dcrutil.Address, account uint32,
-	numTickets int, poolAddress dcrutil.Address, poolFees float64,
-	expiry int32, txFee dcrutil.Amount, ticketFee dcrutil.Amount) ([]*chainhash.Hash,
+func (w *Wallet) PurchaseTickets(minBalance, spendLimit hxutil.Amount,
+	minConf int32, ticketAddr hxutil.Address, account uint32,
+	numTickets int, poolAddress hxutil.Address, poolFees float64,
+	expiry int32, txFee hxutil.Amount, ticketFee hxutil.Amount) ([]*chainhash.Hash,
 	error) {
 
 	req := purchaseTicketRequest{
@@ -1785,7 +1785,7 @@ func (w *Wallet) CalculateAccountBalances(confirms int32) (map[uint32]*udb.Balan
 // If the address has already been used (there is at least one transaction
 // spending to it in the blockchain or dcrd mempool), the next chained address
 // is returned.
-func (w *Wallet) CurrentAddress(account uint32) (dcrutil.Address, error) {
+func (w *Wallet) CurrentAddress(account uint32) (hxutil.Address, error) {
 	var child *hdkeychain.ExtendedKey
 	var err error
 	defer w.addressBuffersMu.Unlock()
@@ -1812,7 +1812,7 @@ func (w *Wallet) CurrentAddress(account uint32) (dcrutil.Address, error) {
 		}
 	}
 	if buf.branchXpub.GetAlgType() == udb.AcctypeBliss {
-		var blissaddr *dcrutil.AddressPubKeyHash
+		var blissaddr *hxutil.AddressPubKeyHash
 		childIndex := buf.lastUsed + 1 + buf.cursor
 		err = walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 			addrmgrNs := tx.ReadBucket(waddrmgrNamespaceKey)
@@ -1830,7 +1830,7 @@ func (w *Wallet) CurrentAddress(account uint32) (dcrutil.Address, error) {
 }
 
 // PubKeyForAddress looks up the associated public key for a P2PKH address.
-func (w *Wallet) PubKeyForAddress(a dcrutil.Address) (chainec.PublicKey, error) {
+func (w *Wallet) PubKeyForAddress(a hxutil.Address) (chainec.PublicKey, error) {
 	var pubKey chainec.PublicKey
 	err := walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 		addrmgrNs := tx.ReadBucket(waddrmgrNamespaceKey)
@@ -1850,7 +1850,7 @@ func (w *Wallet) PubKeyForAddress(a dcrutil.Address) (chainec.PublicKey, error) 
 
 // SignMessage returns the signature of a signed message using an address'
 // associated private key.
-func (w *Wallet) SignMessage(msg string, addr dcrutil.Address) (sig []byte, err error) {
+func (w *Wallet) SignMessage(msg string, addr hxutil.Address) (sig []byte, err error) {
 	var buf bytes.Buffer
 	wire.WriteVarString(&buf, 0, "Decred Signed Message:\n")
 	wire.WriteVarString(&buf, 0, msg)
@@ -1881,7 +1881,7 @@ func (w *Wallet) SignMessage(msg string, addr dcrutil.Address) (sig []byte, err 
 
 // VerifyMessage verifies that sig is a valid signature of msg and was created
 // using the secp256k1 private key for addr.
-func VerifyMessage(msg string, addr dcrutil.Address, sig []byte) (bool, error) {
+func VerifyMessage(msg string, addr hxutil.Address, sig []byte) (bool, error) {
 	// Validate the signature - this just shows that it was valid for any pubkey
 	// at all. Whether the pubkey matches is checked below.
 	var buf bytes.Buffer
@@ -1901,7 +1901,7 @@ func VerifyMessage(msg string, addr dcrutil.Address, sig []byte) (bool, error) {
 	} else {
 		serializedPK = pk.SerializeUncompressed()
 	}
-	recoveredAddr, err := dcrutil.NewAddressSecpPubKey(serializedPK, addr.Net())
+	recoveredAddr, err := hxutil.NewAddressSecpPubKey(serializedPK, addr.Net())
 	if err != nil {
 		return false, err
 	}
@@ -1912,7 +1912,7 @@ func VerifyMessage(msg string, addr dcrutil.Address, sig []byte) (bool, error) {
 
 // existsAddressOnChain checks the chain on daemon to see if the given address
 // has been used before on the main chain.
-func (w *Wallet) existsAddressOnChain(address dcrutil.Address) (bool, error) {
+func (w *Wallet) existsAddressOnChain(address hxutil.Address) (bool, error) {
 	chainClient, err := w.requireChainClient()
 	if err != nil {
 		return false, err
@@ -1927,12 +1927,12 @@ func (w *Wallet) existsAddressOnChain(address dcrutil.Address) (bool, error) {
 
 // ExistsAddressOnChain is the exported version of existsAddressOnChain that is
 // safe for concurrent access.
-func (w *Wallet) ExistsAddressOnChain(address dcrutil.Address) (bool, error) {
+func (w *Wallet) ExistsAddressOnChain(address hxutil.Address) (bool, error) {
 	return w.existsAddressOnChain(address)
 }
 
 // HaveAddress returns whether the wallet is the owner of the address a.
-func (w *Wallet) HaveAddress(a dcrutil.Address) (bool, error) {
+func (w *Wallet) HaveAddress(a hxutil.Address) (bool, error) {
 	err := walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 		addrmgrNs := tx.ReadBucket(waddrmgrNamespaceKey)
 		_, err := w.Manager.Address(addrmgrNs, a)
@@ -1948,7 +1948,7 @@ func (w *Wallet) HaveAddress(a dcrutil.Address) (bool, error) {
 }
 
 // AccountOfAddress finds the account that an address is associated with.
-func (w *Wallet) AccountOfAddress(a dcrutil.Address) (uint32, error) {
+func (w *Wallet) AccountOfAddress(a hxutil.Address) (uint32, error) {
 	var account uint32
 	err := walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 		addrmgrNs := tx.ReadBucket(waddrmgrNamespaceKey)
@@ -1960,7 +1960,7 @@ func (w *Wallet) AccountOfAddress(a dcrutil.Address) (uint32, error) {
 }
 
 // AddressInfo returns detailed information regarding a wallet address.
-func (w *Wallet) AddressInfo(a dcrutil.Address) (udb.ManagedAddress, error) {
+func (w *Wallet) AddressInfo(a hxutil.Address) (udb.ManagedAddress, error) {
 	var managedAddress udb.ManagedAddress
 	err := walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 		addrmgrNs := tx.ReadBucket(waddrmgrNamespaceKey)
@@ -2144,7 +2144,7 @@ func (w *Wallet) NextAccount(name string, actype uint8) (uint32, error) {
 					errs <- client.LoadTxFilter(false, addrs, nil)
 				}
 				if branchKey.GetAlgType() == udb.AcctypeBliss {
-					addrs := make([]dcrutil.Address, DefaultGapLimit)
+					addrs := make([]hxutil.Address, DefaultGapLimit)
 					err := walletdb.Update(w.db, func(tx walletdb.ReadWriteTx) error {
 						addrmgrNs := tx.ReadWriteBucket(waddrmgrNamespaceKey)
 						addrsExt, err := w.Manager.LoadBlissAddrs(addrmgrNs, account, udb.ExternalBranch, 0, DefaultGapLimit)
@@ -2282,13 +2282,13 @@ func listTransactions(tx walletdb.ReadTx, details *udb.TxDetails, addrMgr *udb.M
 	// Fee can only be determined if every input is a debit.
 	var feeF64 float64
 	if len(details.Debits) == len(details.MsgTx.TxIn) {
-		var debitTotal dcrutil.Amount
+		var debitTotal hxutil.Amount
 		for _, deb := range details.Debits {
 			debitTotal += deb.Amount
 		}
-		var outputTotal dcrutil.Amount
+		var outputTotal hxutil.Amount
 		for _, output := range details.MsgTx.TxOut {
-			outputTotal += dcrutil.Amount(output.Value)
+			outputTotal += hxutil.Amount(output.Value)
 		}
 		// Note: The actual fee is debitTotal - outputTotal.  However,
 		// this RPC reports negative numbers for fees, so the inverse
@@ -2331,7 +2331,7 @@ outputs:
 			}
 		}
 
-		amountF64 := dcrutil.Amount(output.Value).ToCoin()
+		amountF64 := hxutil.Amount(output.Value).ToCoin()
 		result := dcrjson.ListTransactionsResult{
 			// Fields left zeroed:
 			//   InvolvesWatchOnly
@@ -2478,7 +2478,7 @@ func (w *Wallet) ListAddressTransactions(pkHashes map[string]struct{}) ([]dcrjso
 					if err != nil || len(addrs) != 1 {
 						continue
 					}
-					apkh, ok := addrs[0].(*dcrutil.AddressPubKeyHash)
+					apkh, ok := addrs[0].(*hxutil.AddressPubKeyHash)
 					if !ok {
 						continue
 					}
@@ -2815,7 +2815,7 @@ func (w *Wallet) GetTransactions(startBlock, endBlock *BlockIdentifier, cancel <
 // AccountResult is a single account result for the AccountsResult type.
 type AccountResult struct {
 	udb.AccountProperties
-	TotalBalance dcrutil.Amount
+	TotalBalance hxutil.Amount
 }
 
 // AccountsResult is the resutl of the wallet's Accounts method.  See that
@@ -2861,7 +2861,7 @@ func (w *Wallet) Accounts() (*AccountsResult, error) {
 		if err != nil {
 			return err
 		}
-		m := make(map[uint32]*dcrutil.Amount)
+		m := make(map[uint32]*hxutil.Amount)
 		for i := range accounts {
 			a := &accounts[i]
 			m[a.AccountNumber] = &a.TotalBalance
@@ -3119,7 +3119,7 @@ func (w *Wallet) ListUnspent(minconf, maxconf int32, addresses map[string]struct
 
 // DumpWIFPrivateKey returns the WIF encoded private key for a
 // single wallet address.
-func (w *Wallet) DumpWIFPrivateKey(addr dcrutil.Address) (string, error) {
+func (w *Wallet) DumpWIFPrivateKey(addr hxutil.Address) (string, error) {
 	var privKey chainec.PrivateKey
 	var done func()
 	defer func() {
@@ -3136,7 +3136,7 @@ func (w *Wallet) DumpWIFPrivateKey(addr dcrutil.Address) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	wif, err := dcrutil.NewWIF(privKey, w.chainParams, privKey.GetType())
+	wif, err := hxutil.NewWIF(privKey, w.chainParams, privKey.GetType())
 	if err != nil {
 		return "", err
 	}
@@ -3145,14 +3145,14 @@ func (w *Wallet) DumpWIFPrivateKey(addr dcrutil.Address) (string, error) {
 
 // ImportPrivateKey imports a private key to the wallet and writes the new
 // wallet to disk.
-func (w *Wallet) ImportPrivateKey(wif *dcrutil.WIF) (string, error) {
+func (w *Wallet) ImportPrivateKey(wif *hxutil.WIF) (string, error) {
 	chainClient, err := w.requireChainClient()
 	if err != nil {
 		return "", err
 	}
 
 	// Attempt to import private key into wallet.
-	var addr dcrutil.Address
+	var addr hxutil.Address
 	var props *udb.AccountProperties
 	err = walletdb.Update(w.db, func(tx walletdb.ReadWriteTx) error {
 		addrmgrNs := tx.ReadWriteBucket(waddrmgrNamespaceKey)
@@ -3168,7 +3168,7 @@ func (w *Wallet) ImportPrivateKey(wif *dcrutil.WIF) (string, error) {
 		return "", err
 	}
 
-	err = chainClient.LoadTxFilter(false, []dcrutil.Address{addr}, nil)
+	err = chainClient.LoadTxFilter(false, []hxutil.Address{addr}, nil)
 	if err != nil {
 		return "", fmt.Errorf("Failed to subscribe for address ntfns for "+
 			"address %s: %s", addr.EncodeAddress(), err)
@@ -3217,7 +3217,7 @@ func (w *Wallet) ImportScript(rs []byte) error {
 			}
 		}
 		err = chainClient.LoadTxFilter(false,
-			[]dcrutil.Address{mscriptaddr.Address()}, nil)
+			[]hxutil.Address{mscriptaddr.Address()}, nil)
 		if err != nil {
 			return fmt.Errorf("Failed to subscribe for address ntfns for "+
 				"address %s: %s", mscriptaddr.Address().EncodeAddress(),
@@ -3234,7 +3234,7 @@ func (w *Wallet) ImportScript(rs []byte) error {
 
 // RedeemScriptCopy returns a copy of a redeem script to redeem outputs payed to
 // a P2SH address.
-func (w *Wallet) RedeemScriptCopy(addr dcrutil.Address) ([]byte, error) {
+func (w *Wallet) RedeemScriptCopy(addr hxutil.Address) ([]byte, error) {
 	var scriptCopy []byte
 	err := walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 		ns := tx.ReadBucket(waddrmgrNamespaceKey)
@@ -3263,7 +3263,7 @@ type StakeInfoData struct {
 	Missed        uint32
 	Revoked       uint32
 	Expired       uint32
-	TotalSubsidy  dcrutil.Amount
+	TotalSubsidy  hxutil.Amount
 }
 
 func isTicketPurchase(tx *wire.MsgTx) bool {
@@ -3381,7 +3381,7 @@ func (w *Wallet) StakeInfo(chainClient *dcrrpcclient.Client) (*StakeInfoData, er
 					// Similarily, for stakepool wallets, this includes the
 					// customer's subsidy rather than being just the subsidy
 					// earned by fees.
-					res.TotalSubsidy += dcrutil.Amount(spender.TxIn[0].ValueIn)
+					res.TotalSubsidy += hxutil.Amount(spender.TxIn[0].ValueIn)
 
 				case isRevocation(spender):
 					res.Revoked++
@@ -3551,7 +3551,7 @@ func (w *Wallet) SortedActivePaymentAddresses() ([]string, error) {
 	var addrStrs []string
 	err := walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 		addrmgrNs := tx.ReadBucket(waddrmgrNamespaceKey)
-		return w.Manager.ForEachActiveAddress(addrmgrNs, func(addr dcrutil.Address) error {
+		return w.Manager.ForEachActiveAddress(addrmgrNs, func(addr hxutil.Address) error {
 			addrStrs = append(addrStrs, addr.EncodeAddress())
 			return nil
 		})
@@ -3587,7 +3587,7 @@ func confirms(txHeight, curHeight int32) int32 {
 type AccountTotalReceivedResult struct {
 	AccountNumber    uint32
 	AccountName      string
-	TotalReceived    dcrutil.Amount
+	TotalReceived    hxutil.Amount
 	LastConfirmation int32
 }
 
@@ -3659,8 +3659,8 @@ func (w *Wallet) TotalReceivedForAccounts(minConf int32) ([]AccountTotalReceived
 // TotalReceivedForAddr iterates through a wallet's transaction history,
 // returning the total amount of decred received for a single wallet
 // address.
-func (w *Wallet) TotalReceivedForAddr(addr dcrutil.Address, minConf int32) (dcrutil.Amount, error) {
-	var amount dcrutil.Amount
+func (w *Wallet) TotalReceivedForAddr(addr hxutil.Address, minConf int32) (hxutil.Amount, error) {
+	var amount hxutil.Amount
 	err := walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 		txmgrNs := tx.ReadBucket(wtxmgrNamespaceKey)
 
@@ -3748,7 +3748,7 @@ type SignatureError struct {
 // The transaction pointed to by tx is modified by this function.
 func (w *Wallet) SignTransaction(tx *wire.MsgTx, hashType txscript.SigHashType,
 	additionalPrevScripts map[wire.OutPoint][]byte,
-	additionalKeysByAddress map[string]*dcrutil.WIF,
+	additionalKeysByAddress map[string]*hxutil.WIF,
 	p2shRedeemScriptsByAddress map[string][]byte) ([]SignatureError, error) {
 
 	var doneFuncs []func()
@@ -3792,7 +3792,7 @@ func (w *Wallet) SignTransaction(tx *wire.MsgTx, hashType txscript.SigHashType,
 
 			// Set up our callbacks that we pass to txscript so it can
 			// look up the appropriate keys and scripts by address.
-			getKey := txscript.KeyClosure(func(addr dcrutil.Address) (
+			getKey := txscript.KeyClosure(func(addr hxutil.Address) (
 				chainec.PrivateKey, bool, error) {
 				if len(additionalKeysByAddress) != 0 {
 					addrStr := addr.EncodeAddress()
@@ -3822,7 +3822,7 @@ func (w *Wallet) SignTransaction(tx *wire.MsgTx, hashType txscript.SigHashType,
 				return key, pka.Compressed(), nil
 			})
 			getScript := txscript.ScriptClosure(func(
-				addr dcrutil.Address) ([]byte, error) {
+				addr hxutil.Address) ([]byte, error) {
 				// If keys were provided then we can only use the
 				// redeem scripts provided with our inputs, too.
 				if len(additionalKeysByAddress) != 0 {
@@ -3931,7 +3931,7 @@ func (w *Wallet) SignTransaction(tx *wire.MsgTx, hashType txscript.SigHashType,
 // CreateSignature returns the raw signature created by the private key of addr
 // for tx's idx'th input script and the serialized compressed pubkey for the
 // address.
-func (w *Wallet) CreateSignature(tx *wire.MsgTx, idx uint32, addr dcrutil.Address,
+func (w *Wallet) CreateSignature(tx *wire.MsgTx, idx uint32, addr hxutil.Address,
 	hashType txscript.SigHashType, prevPkScript []byte) (sig, pubkey []byte, err error) {
 
 	var privKey chainec.PrivateKey
@@ -3976,7 +3976,7 @@ func (w *Wallet) isRelevantTx(dbtx walletdb.ReadTx, tx *wire.MsgTx) bool {
 		// wallet output.
 		rs, err := txscript.MultisigRedeemScriptFromScriptSig(in.SignatureScript)
 		if err == nil && rs != nil && w.Manager.ExistsHash160(addrmgrNs,
-			dcrutil.Hash160(rs)) {
+			hxutil.Hash160(rs)) {
 			return true
 		}
 		if w.TxStore.ExistsUTXO(dbtx, &in.PreviousOutPoint) {
@@ -4166,7 +4166,7 @@ func decodeStakePoolColdExtKey(encStr string, params *chaincfg.Params) (map[stri
 
 // Open loads an already-created wallet from the passed database and namespaces.
 func Open(db walletdb.DB, pubPass []byte, privPass []byte, votingEnabled bool, addressReuse bool,
-	ticketAddress dcrutil.Address, poolAddress dcrutil.Address, poolFees float64, ticketFee float64,
+	ticketAddress hxutil.Address, poolAddress hxutil.Address, poolFees float64, ticketFee float64,
 	gapLimit int, stakePoolColdExtKey string, allowHighFees bool,
 	relayFee float64, params *chaincfg.Params) (*Wallet, error) {
 
@@ -4200,12 +4200,12 @@ func Open(db walletdb.DB, pubPass []byte, privPass []byte, votingEnabled bool, a
 		return nil, err
 	}
 
-	ticketFeeAmt, err := dcrutil.NewAmount(ticketFee)
+	ticketFeeAmt, err := hxutil.NewAmount(ticketFee)
 	if err != nil {
 		return nil, err
 	}
 
-	relayFeeAmt, err := dcrutil.NewAmount(relayFee)
+	relayFeeAmt, err := hxutil.NewAmount(relayFee)
 	if err != nil {
 		return nil, err
 	}

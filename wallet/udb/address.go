@@ -9,7 +9,7 @@ import (
 	"encoding/hex"
 
 	"github.com/coolsnady/hxd/chaincfg/chainec"
-	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	hxutil "github.com/coolsnady/hxd/hxutil"
 	"github.com/coolsnady/hxd/hdkeychain"
 	"github.com/coolsnady/hxwallet/apperrors"
 )
@@ -22,8 +22,8 @@ type ManagedAddress interface {
 	// Account returns the account the address is associated with.
 	Account() uint32
 
-	// Address returns a dcrutil.Address for the backing address.
-	Address() dcrutil.Address
+	// Address returns a hxutil.Address for the backing address.
+	Address() hxutil.Address
 
 	// AddrHash returns the key or script hash related to the address
 	AddrHash() []byte
@@ -73,7 +73,7 @@ type ManagedScriptAddress interface {
 type managedAddress struct {
 	manager    *Manager
 	account    uint32
-	address    *dcrutil.AddressPubKeyHash
+	address    *hxutil.AddressPubKeyHash
 	imported   bool
 	internal   bool
 	multisig   bool
@@ -91,11 +91,11 @@ func (a *managedAddress) Account() uint32 {
 	return a.account
 }
 
-// Address returns the dcrutil.Address which represents the managed address.
+// Address returns the hxutil.Address which represents the managed address.
 // This will be a pay-to-pubkey-hash address.
 //
 // This is part of the ManagedAddress interface implementation.
-func (a *managedAddress) Address() dcrutil.Address {
+func (a *managedAddress) Address() hxutil.Address {
 	return a.address
 }
 
@@ -167,13 +167,13 @@ func newManagedAddressWithoutPrivKey(m *Manager, account uint32, pubKey chainec.
 	// Create a pay-to-pubkey-hash address from the public key.
 	var pubKeyHash []byte
 	if compressed && pubKey.GetType() == chainec.ECTypeSecp256k1 {
-		pubKeyHash = dcrutil.Hash160(pubKey.SerializeCompressed())
+		pubKeyHash = hxutil.Hash160(pubKey.SerializeCompressed())
 	} else if pubKey.GetType() == chainec.ECTypeSecp256k1 {
-		pubKeyHash = dcrutil.Hash160(pubKey.SerializeUncompressed())
+		pubKeyHash = hxutil.Hash160(pubKey.SerializeUncompressed())
 	} else {
-		pubKeyHash = dcrutil.Hash160(pubKey.Serialize())
+		pubKeyHash = hxutil.Hash160(pubKey.Serialize())
 	}
-	address, err := dcrutil.NewAddressPubKeyHash(pubKeyHash, m.chainParams,
+	address, err := hxutil.NewAddressPubKeyHash(pubKeyHash, m.chainParams,
 		pubKey.GetType())
 	if err != nil {
 		return nil, err
@@ -209,7 +209,7 @@ func newManagedAddressFromExtKey(m *Manager, account uint32, key *hdkeychain.Ext
 type scriptAddress struct {
 	manager *Manager
 	account uint32
-	address *dcrutil.AddressScriptHash
+	address *hxutil.AddressScriptHash
 }
 
 // Enforce scriptAddress satisfies the ManagedScriptAddress interface.
@@ -223,11 +223,11 @@ func (a *scriptAddress) Account() uint32 {
 	return a.account
 }
 
-// Address returns the dcrutil.Address which represents the managed address.
+// Address returns the hxutil.Address which represents the managed address.
 // This will be a pay-to-script-hash address.
 //
 // This is part of the ManagedAddress interface implementation.
-func (a *scriptAddress) Address() dcrutil.Address {
+func (a *scriptAddress) Address() hxutil.Address {
 	return a.address
 }
 
@@ -275,7 +275,7 @@ func (*scriptAddress) isScriptAddress() {}
 
 // newScriptAddress initializes and returns a new pay-to-script-hash address.
 func newScriptAddress(m *Manager, account uint32, scriptHash []byte) (*scriptAddress, error) {
-	address, err := dcrutil.NewAddressScriptHashFromHash(scriptHash,
+	address, err := hxutil.NewAddressScriptHashFromHash(scriptHash,
 		m.chainParams)
 	if err != nil {
 		return nil, err

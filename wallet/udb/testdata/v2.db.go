@@ -19,7 +19,7 @@ import (
 	"github.com/coolsnady/hxd/blockchain/stake"
 	"github.com/coolsnady/hxd/chaincfg"
 	"github.com/coolsnady/hxd/wire"
-	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	hxutil "github.com/coolsnady/hxd/hxutil"
 	"github.com/coolsnady/hxd/hdkeychain"
 	"github.com/coolsnady/hxwallet/wallet/udb"
 	"github.com/coolsnady/hxwallet/walletdb"
@@ -89,7 +89,7 @@ func setup() error {
 			Bits:         1,
 			ExtendedBits: []byte{0, 0, 0, 4},
 		}
-		return smgr.InsertSStx(ns, dcrutil.NewTx(&ticketPurchase), vb)
+		return smgr.InsertSStx(ns, hxutil.NewTx(&ticketPurchase), vb)
 	})
 }
 

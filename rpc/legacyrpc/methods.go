@@ -24,7 +24,7 @@ import (
 	"github.com/coolsnady/hxd/txscript"
 	"github.com/coolsnady/hxd/wire"
 	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
-	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	hxutil "github.com/coolsnady/hxd/hxutil"
 	"github.com/coolsnady/hxd/hdkeychain"
 	"github.com/coolsnady/hxwallet/apperrors"
 	"github.com/coolsnady/hxwallet/wallet"
@@ -353,7 +353,7 @@ func accountSyncAddressIndex(icmd interface{}, w *wallet.Wallet) (interface{}, e
 
 func makeMultiSigScript(w *wallet.Wallet, keys []string,
 	nRequired int) ([]byte, error) {
-	keysesPrecious := make([]*dcrutil.AddressSecpPubKey, len(keys))
+	keysesPrecious := make([]*hxutil.AddressSecpPubKey, len(keys))
 
 	// The address list will made up either of addreseses (pubkey hash), for
 	// which we need to look up the keys in wallet, straight pubkeys, or a
@@ -366,7 +366,7 @@ func makeMultiSigScript(w *wallet.Wallet, keys []string,
 		}
 
 		switch addr := a.(type) {
-		case *dcrutil.AddressSecpPubKey:
+		case *hxutil.AddressSecpPubKey:
 			keysesPrecious[i] = addr
 		default:
 			pubKey, err := w.PubKeyForAddress(addr)
@@ -377,7 +377,7 @@ func makeMultiSigScript(w *wallet.Wallet, keys []string,
 				return nil, errors.New("only secp256k1 " +
 					"pubkeys are currently supported")
 			}
-			pubKeyAddr, err := dcrutil.NewAddressSecpPubKey(
+			pubKeyAddr, err := hxutil.NewAddressSecpPubKey(
 				pubKey.Serialize(), w.ChainParams())
 			if err != nil {
 				return nil, err
@@ -399,7 +399,7 @@ func addMultiSigAddress(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpcc
 		return nil, &ErrNotImportedAccount
 	}
 
-	secp256k1Addrs := make([]dcrutil.Address, len(cmd.Keys))
+	secp256k1Addrs := make([]hxutil.Address, len(cmd.Keys))
 	for i, k := range cmd.Keys {
 		addr, err := decodeAddress(k, w.ChainParams())
 		if err != nil {
@@ -418,7 +418,7 @@ func addMultiSigAddress(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpcc
 		return nil, err
 	}
 
-	err = chainClient.LoadTxFilter(false, []dcrutil.Address{p2shAddr}, nil)
+	err = chainClient.LoadTxFilter(false, []hxutil.Address{p2shAddr}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -460,7 +460,7 @@ func consolidate(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 	}
 
 	// Set change address if specified.
-	var changeAddr dcrutil.Address
+	var changeAddr hxutil.Address
 	if cmd.Address != nil {
 		if *cmd.Address != "" {
 			addr, err := decodeAddress(*cmd.Address, w.ChainParams())
@@ -491,7 +491,7 @@ func createMultiSig(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 		return nil, ParseError{err}
 	}
 
-	address, err := dcrutil.NewAddressScriptHash(script, w.ChainParams())
+	address, err := hxutil.NewAddressScriptHash(script, w.ChainParams())
 	if err != nil {
 		// above is a valid script, shouldn't happen.
 		return nil, err
@@ -725,7 +725,7 @@ func getInfo(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpcclient.Clien
 		return nil, err
 	}
 
-	var bal dcrutil.Amount
+	var bal hxutil.Amount
 	for _, balance := range balances {
 		bal += balance.Spendable
 	}
@@ -743,14 +743,14 @@ func getInfo(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpcclient.Clien
 	return info, nil
 }
 
-func decodeAddress(s string, params *chaincfg.Params) (dcrutil.Address, error) {
+func decodeAddress(s string, params *chaincfg.Params) (hxutil.Address, error) {
 	// Secp256k1 pubkey as a string, handle differently.
 	if len(s) == 66 || len(s) == 130 {
 		pubKeyBytes, err := hex.DecodeString(s)
 		if err != nil {
 			return nil, err
 		}
-		pubKeyAddr, err := dcrutil.NewAddressSecpPubKey(pubKeyBytes,
+		pubKeyAddr, err := hxutil.NewAddressSecpPubKey(pubKeyBytes,
 			params)
 		if err != nil {
 			return nil, err
@@ -759,7 +759,7 @@ func decodeAddress(s string, params *chaincfg.Params) (dcrutil.Address, error) {
 		return pubKeyAddr, nil
 	}
 
-	addr, err := dcrutil.DecodeAddress(s)
+	addr, err := hxutil.DecodeAddress(s)
 	if err != nil {
 		msg := fmt.Sprintf("Invalid address %q: decode failed with %#q", s, err)
 		return nil, &dcrjson.RPCError{
@@ -855,7 +855,7 @@ func importPrivKey(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpcclient
 		return nil, &ErrNotImportedAccount
 	}
 
-	wif, err := dcrutil.DecodeWIF(cmd.PrivKey)
+	wif, err := hxutil.DecodeWIF(cmd.PrivKey)
 	if err != nil {
 		return nil, &dcrjson.RPCError{
 			Code:    dcrjson.ErrRPCInvalidAddressOrKey,
@@ -1280,9 +1280,9 @@ func getTransaction(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 	}
 
 	var (
-		debitTotal  dcrutil.Amount
-		creditTotal dcrutil.Amount // Excludes change
-		fee         dcrutil.Amount
+		debitTotal  hxutil.Amount
+		creditTotal hxutil.Amount // Excludes change
+		fee         hxutil.Amount
 		feeF64      float64
 	)
 	for _, deb := range details.Debits {
@@ -1295,9 +1295,9 @@ func getTransaction(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 	}
 	// Fee can only be determined if every input is a debit.
 	if len(details.Debits) == len(details.MsgTx.TxIn) {
-		var outputTotal dcrutil.Amount
+		var outputTotal hxutil.Amount
 		for _, output := range details.MsgTx.TxOut {
-			outputTotal += dcrutil.Amount(output.Value)
+			outputTotal += hxutil.Amount(output.Value)
 		}
 		fee = debitTotal - outputTotal
 		feeF64 = fee.ToCoin()
@@ -1580,7 +1580,7 @@ func listReceivedByAddress(icmd interface{}, w *wallet.Wallet) (interface{}, err
 	// Intermediate data for each address.
 	type AddrData struct {
 		// Total amount received.
-		amount dcrutil.Amount
+		amount hxutil.Amount
 		// Number of confirmations of the last transaction.
 		confirmations int32
 		// Hashes of transactions which include an output paying to the address
@@ -1714,7 +1714,7 @@ func listScripts(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 	}
 	listScriptsResultSIs := make([]dcrjson.ScriptInfo, len(redeemScripts))
 	for i, redeemScript := range redeemScripts {
-		p2shAddr, err := dcrutil.NewAddressScriptHash(redeemScript,
+		p2shAddr, err := hxutil.NewAddressScriptHash(redeemScript,
 			w.ChainParams())
 		if err != nil {
 			return nil, err
@@ -1846,7 +1846,7 @@ func lockUnspent(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 func purchaseTicket(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 	// Enforce valid and positive spend limit.
 	cmd := icmd.(*dcrjson.PurchaseTicketCmd)
-	spendLimit, err := dcrutil.NewAmount(cmd.SpendLimit)
+	spendLimit, err := hxutil.NewAmount(cmd.SpendLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -1874,7 +1874,7 @@ func purchaseTicket(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 	}
 
 	// Set ticket address if specified.
-	var ticketAddr dcrutil.Address
+	var ticketAddr hxutil.Address
 	if cmd.TicketAddress != nil {
 		if *cmd.TicketAddress != "" {
 			if bytes.Equal([]byte((*cmd.TicketAddress)[0:2]), []byte("Hb")) {
@@ -1896,7 +1896,7 @@ func purchaseTicket(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 	}
 
 	// Set pool address if specified.
-	var poolAddr dcrutil.Address
+	var poolAddr hxutil.Address
 	var poolFee float64
 	if cmd.PoolAddress != nil {
 		if *cmd.PoolAddress != "" {
@@ -1944,7 +1944,7 @@ func purchaseTicket(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 // strings to amounts.  This is used to create the outputs to include in newly
 // created transactions from a JSON object describing the output destinations
 // and amounts.
-func makeOutputs(pairs map[string]dcrutil.Amount, chainParams *chaincfg.Params) ([]*wire.TxOut, error) {
+func makeOutputs(pairs map[string]hxutil.Amount, chainParams *chaincfg.Params) ([]*wire.TxOut, error) {
 	outputs := make([]*wire.TxOut, 0, len(pairs))
 	for addrStr, amt := range pairs {
 		addr, err := decodeAddress(addrStr, chainParams)
@@ -1965,7 +1965,7 @@ func makeOutputs(pairs map[string]dcrutil.Amount, chainParams *chaincfg.Params) 
 // sendPairs creates and sends payment transactions.
 // It returns the transaction hash in string format upon success
 // All errors are returned in dcrjson.RPCError format
-func sendPairs(w *wallet.Wallet, amounts map[string]dcrutil.Amount,
+func sendPairs(w *wallet.Wallet, amounts map[string]hxutil.Amount,
 	account uint32, minconf int32) (string, error) {
 	outputs, err := makeOutputs(amounts, w.ChainParams())
 	if err != nil {
@@ -2004,7 +2004,7 @@ func redeemMultiSigOut(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpccl
 	// Convert the address to a useable format. If
 	// we have no address, create a new address in
 	// this wallet to send the output to.
-	var addr dcrutil.Address
+	var addr hxutil.Address
 	var err error
 	if cmd.Address != nil {
 		addr, err = decodeAddress(*cmd.Address, w.ChainParams())
@@ -2112,7 +2112,7 @@ func redeemMultiSigOuts(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpcc
 	if err != nil {
 		return nil, err
 	}
-	p2shAddr, ok := addr.(*dcrutil.AddressScriptHash)
+	p2shAddr, ok := addr.(*hxutil.AddressScriptHash)
 	if !ok {
 		return nil, errors.New("address is not P2SH")
 	}
@@ -2171,7 +2171,7 @@ func revokeTickets(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpcclient
 func stakePoolUserInfo(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 	cmd := icmd.(*dcrjson.StakePoolUserInfoCmd)
 
-	userAddr, err := dcrutil.DecodeAddress(cmd.User)
+	userAddr, err := hxutil.DecodeAddress(cmd.User)
 	if err != nil {
 		return nil, err
 	}
@@ -2220,7 +2220,7 @@ func stakePoolUserInfo(icmd interface{}, w *wallet.Wallet) (interface{}, error) 
 func ticketsForAddress(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 	cmd := icmd.(*dcrjson.TicketsForAddressCmd)
 
-	addr, err := dcrutil.DecodeAddress(cmd.Address)
+	addr, err := hxutil.DecodeAddress(cmd.Address)
 	if err != nil {
 		return nil, err
 	}
@@ -2273,11 +2273,11 @@ func sendFrom(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpcclient.Clie
 		return nil, ErrNeedPositiveMinconf
 	}
 	// Create map of address and amount pairs.
-	amt, err := dcrutil.NewAmount(cmd.Amount)
+	amt, err := hxutil.NewAmount(cmd.Amount)
 	if err != nil {
 		return nil, err
 	}
-	pairs := map[string]dcrutil.Amount{
+	pairs := map[string]hxutil.Amount{
 		cmd.ToAddress: amt,
 	}
 
@@ -2312,10 +2312,10 @@ func sendMany(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 		return nil, ErrNeedPositiveMinconf
 	}
 
-	// Recreate address/amount pairs, using dcrutil.Amount.
-	pairs := make(map[string]dcrutil.Amount, len(cmd.Amounts))
+	// Recreate address/amount pairs, using hxutil.Amount.
+	pairs := make(map[string]hxutil.Amount, len(cmd.Amounts))
 	for k, v := range cmd.Amounts {
-		amt, err := dcrutil.NewAmount(v)
+		amt, err := hxutil.NewAmount(v)
 		if err != nil {
 			return nil, err
 		}
@@ -2342,7 +2342,7 @@ func sendToAddress(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 		}
 	}
 
-	amt, err := dcrutil.NewAmount(cmd.Amount)
+	amt, err := hxutil.NewAmount(cmd.Amount)
 	if err != nil {
 		return nil, err
 	}
@@ -2353,7 +2353,7 @@ func sendToAddress(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 	}
 
 	// Mock up map of address and amount pairs.
-	pairs := map[string]dcrutil.Amount{
+	pairs := map[string]hxutil.Amount{
 		cmd.Address: amt,
 	}
 
@@ -2375,13 +2375,13 @@ func sendToAddress(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 func sendToMultiSig(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpcclient.Client) (interface{}, error) {
 	cmd := icmd.(*dcrjson.SendToMultiSigCmd)
 	account := uint32(udb.DefaultAccountNum)
-	amount, err := dcrutil.NewAmount(cmd.Amount)
+	amount, err := hxutil.NewAmount(cmd.Amount)
 	if err != nil {
 		return nil, err
 	}
 	nrequired := int8(*cmd.NRequired)
 	minconf := int32(*cmd.MinConf)
-	pubkeys := make([]*dcrutil.AddressSecpPubKey, len(cmd.Pubkeys))
+	pubkeys := make([]*hxutil.AddressSecpPubKey, len(cmd.Pubkeys))
 
 	// The address list will made up either of addreseses (pubkey hash), for
 	// which we need to look up the keys in wallet, straight pubkeys, or a
@@ -2394,7 +2394,7 @@ func sendToMultiSig(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpcclien
 		}
 
 		switch addr := a.(type) {
-		case *dcrutil.AddressSecpPubKey:
+		case *hxutil.AddressSecpPubKey:
 			pubkeys[i] = addr
 		default:
 			pubKey, err := w.PubKeyForAddress(addr)
@@ -2405,7 +2405,7 @@ func sendToMultiSig(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpcclien
 				return nil, errors.New("only secp256k1 " +
 					"pubkeys are currently supported")
 			}
-			pubKeyAddr, err := dcrutil.NewAddressSecpPubKey(
+			pubKeyAddr, err := hxutil.NewAddressSecpPubKey(
 				pubKey.Serialize(), w.ChainParams())
 			if err != nil {
 				return nil, err
@@ -2426,7 +2426,7 @@ func sendToMultiSig(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpcclien
 		RedeemScript: hex.EncodeToString(script),
 	}
 
-	err = chainClient.LoadTxFilter(false, []dcrutil.Address{addr}, nil)
+	err = chainClient.LoadTxFilter(false, []hxutil.Address{addr}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2456,10 +2456,10 @@ func sendToSStx(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpcclient.Cl
 		return nil, ErrNeedPositiveMinconf
 	}
 
-	// Recreate address/amount pairs, using dcrutil.Amount.
-	pair := make(map[string]dcrutil.Amount, len(cmd.Amounts))
+	// Recreate address/amount pairs, using hxutil.Amount.
+	pair := make(map[string]hxutil.Amount, len(cmd.Amounts))
 	for k, v := range cmd.Amounts {
-		pair[k] = dcrutil.Amount(v)
+		pair[k] = hxutil.Amount(v)
 	}
 	// Get current block's height.
 	_, tipHeight := w.MainChainTip()
@@ -2592,7 +2592,7 @@ func setTicketFee(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 		return nil, ErrNeedPositiveAmount
 	}
 
-	incr, err := dcrutil.NewAmount(cmd.Fee)
+	incr, err := hxutil.NewAmount(cmd.Fee)
 	if err != nil {
 		return nil, err
 	}
@@ -2611,7 +2611,7 @@ func setTxFee(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 		return nil, ErrNeedPositiveAmount
 	}
 
-	relayFee, err := dcrutil.NewAmount(cmd.Amount)
+	relayFee, err := hxutil.NewAmount(cmd.Amount)
 	if err != nil {
 		return nil, err
 	}
@@ -2729,7 +2729,7 @@ func signRawTransaction(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpcc
 				return nil, err
 			}
 
-			addr, err := dcrutil.NewAddressScriptHash(redeemScript,
+			addr, err := hxutil.NewAddressScriptHash(redeemScript,
 				w.ChainParams())
 			if err != nil {
 				return nil, DeserializationError{err}
@@ -2775,12 +2775,12 @@ func signRawTransaction(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpcc
 	// Parse list of private keys, if present. If there are any keys here
 	// they are the keys that we may use for signing. If empty we will
 	// use any keys known to us already.
-	var keys map[string]*dcrutil.WIF
+	var keys map[string]*hxutil.WIF
 	if cmd.PrivKeys != nil {
-		keys = make(map[string]*dcrutil.WIF)
+		keys = make(map[string]*hxutil.WIF)
 
 		for _, key := range *cmd.PrivKeys {
-			wif, err := dcrutil.DecodeWIF(key)
+			wif, err := hxutil.DecodeWIF(key)
 			if err != nil {
 				return nil, DeserializationError{err}
 			}
@@ -2790,23 +2790,23 @@ func signRawTransaction(icmd interface{}, w *wallet.Wallet, chainClient *dcrrpcc
 				return nil, DeserializationError{errors.New(s)}
 			}
 
-			var addr dcrutil.Address
+			var addr hxutil.Address
 			switch wif.DSA() {
 			case chainec.ECTypeSecp256k1:
-				addr, err = dcrutil.NewAddressSecpPubKey(wif.SerializePubKey(),
+				addr, err = hxutil.NewAddressSecpPubKey(wif.SerializePubKey(),
 					w.ChainParams())
 				if err != nil {
 					return nil, DeserializationError{err}
 				}
 			case chainec.ECTypeEdwards:
-				addr, err = dcrutil.NewAddressEdwardsPubKey(
+				addr, err = hxutil.NewAddressEdwardsPubKey(
 					wif.SerializePubKey(),
 					w.ChainParams())
 				if err != nil {
 					return nil, DeserializationError{err}
 				}
 			case chainec.ECTypeSecSchnorr:
-				addr, err = dcrutil.NewAddressSecSchnorrPubKey(
+				addr, err = hxutil.NewAddressSecSchnorrPubKey(
 					wif.SerializePubKey(),
 					w.ChainParams())
 				if err != nil {
@@ -2996,14 +2996,14 @@ func validateAddress(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 			return nil, err
 		}
 		if len(pubKeyBytes) == 897 {
-			pubKeyAddr, err := dcrutil.NewAddressBlissPubKey(pubKeyBytes,
+			pubKeyAddr, err := hxutil.NewAddressBlissPubKey(pubKeyBytes,
 				w.ChainParams())
 			if err != nil {
 				return nil, err
 			}
 			result.PubKeyAddr = pubKeyAddr.String()
 		} else {
-			pubKeyAddr, err := dcrutil.NewAddressSecpPubKey(pubKeyBytes,
+			pubKeyAddr, err := hxutil.NewAddressSecpPubKey(pubKeyBytes,
 				w.ChainParams())
 			if err != nil {
 				return nil, err
@@ -3058,7 +3058,7 @@ func verifyMessage(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 	var valid bool
 
 	// Decode address and base64 signature from the request.
-	addr, err := dcrutil.DecodeAddress(cmd.Address)
+	addr, err := hxutil.DecodeAddress(cmd.Address)
 	if err != nil {
 		return nil, err
 	}
@@ -3070,8 +3070,8 @@ func verifyMessage(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 	// Addresses must have an associated secp256k1 private key and therefore
 	// must be P2PK or P2PKH (P2SH is not allowed).
 	switch a := addr.(type) {
-	case *dcrutil.AddressSecpPubKey:
-	case *dcrutil.AddressPubKeyHash:
+	case *hxutil.AddressSecpPubKey:
+	case *hxutil.AddressPubKeyHash:
 		if a.DSA(a.Net()) != chainec.ECTypeSecp256k1 {
 			goto WrongAddrKind
 		}

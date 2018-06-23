@@ -27,7 +27,7 @@ import (
 	"github.com/coolsnady/hxd/dcrec/secp256k1"
 	"github.com/coolsnady/hxd/txscript"
 	"github.com/coolsnady/hxd/wire"
-	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	hxutil "github.com/coolsnady/hxd/hxutil"
 	"github.com/coolsnady/hxd/hdkeychain"
 	"github.com/coolsnady/hxwallet/wallet/internal/txsizes"
 	"github.com/coolsnady/hxwallet/wallet/txrules"
@@ -43,7 +43,7 @@ var (
 	pubPass  = []byte("public")
 	privPass = []byte("private")
 	privKey  = []byte{31: 1}
-	addr     dcrutil.Address
+	addr     hxutil.Address
 )
 
 var chainParams = &chaincfg.TestNet2Params
@@ -100,7 +100,7 @@ func setup() error {
 		}
 
 		privKey, _ := secp256k1.PrivKeyFromBytes(secp256k1.S256(), privKey)
-		wif, err := dcrutil.NewWIF(privKey, chainParams, chainec.ECTypeSecp256k1)
+		wif, err := hxutil.NewWIF(privKey, chainParams, chainec.ECTypeSecp256k1)
 		if err != nil {
 			return err
 		}
@@ -261,7 +261,7 @@ func compress() error {
 }
 
 func createUnsignedTicketPurchase(prevOut *wire.OutPoint,
-	inputAmount, ticketPrice dcrutil.Amount) (*wire.MsgTx, error) {
+	inputAmount, ticketPrice hxutil.Amount) (*wire.MsgTx, error) {
 
 	tx := wire.NewMsgTx()
 
@@ -281,7 +281,7 @@ func createUnsignedTicketPurchase(prevOut *wire.OutPoint,
 	}
 
 	pkScript, err = txscript.GenerateSStxAddrPush(addr,
-		dcrutil.Amount(amountsCommitted[0]), ticketFeeLimits)
+		hxutil.Amount(amountsCommitted[0]), ticketFeeLimits)
 	if err != nil {
 		return nil, err
 	}
@@ -373,7 +373,7 @@ func createUnsignedVote(ticketHash *chainhash.Hash, ticketPurchase *wire.MsgTx,
 // revokes a missed or expired ticket.  Revocations must carry a relay fee and
 // this function can error if the revocation contains no suitable output to
 // decrease the estimated relay fee from.
-func createUnsignedRevocation(ticketHash *chainhash.Hash, ticketPurchase *wire.MsgTx, feePerKB dcrutil.Amount) (*wire.MsgTx, error) {
+func createUnsignedRevocation(ticketHash *chainhash.Hash, ticketPurchase *wire.MsgTx, feePerKB hxutil.Amount) (*wire.MsgTx, error) {
 	// Parse the ticket purchase transaction to determine the required output
 	// destinations for vote rewards or revocations.
 	ticketPayKinds, ticketHash160s, ticketValues, _, _, _ :=
@@ -416,8 +416,8 @@ func createUnsignedRevocation(ticketHash *chainhash.Hash, ticketPurchase *wire.M
 	// code does not currently handle reducing the output values of multiple
 	// commitment outputs to accomodate for the fee.
 	for _, output := range revocation.TxOut {
-		if dcrutil.Amount(output.Value) > feeEstimate {
-			amount := dcrutil.Amount(output.Value) - feeEstimate
+		if hxutil.Amount(output.Value) > feeEstimate {
+			amount := hxutil.Amount(output.Value) - feeEstimate
 			if !txrules.IsDustAmount(amount, len(output.PkScript), feePerKB) {
 				output.Value = int64(amount)
 				return revocation, nil

@@ -20,7 +20,7 @@ import (
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
 
 	rpc "github.com/coolsnady/hxd/rpcclient"
-	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	hxutil "github.com/coolsnady/hxd/hxutil"
 )
 
 var (
@@ -79,7 +79,7 @@ type Harness struct {
 	testWalletDir  string
 	maxConnRetries int
 	nodeNum        int
-	miningAddr     dcrutil.Address
+	miningAddr     hxutil.Address
 }
 
 // NewHarness creates and initializes a new instance of the rpc test harness.
@@ -221,7 +221,7 @@ func (h *Harness) SetUp(createTestChain bool, numMatureOutputs uint32) error {
 
 	// Get a new address from the wallet to be set with dcrd's --miningaddr
 	time.Sleep(5 * time.Second)
-	var miningAddr dcrutil.Address
+	var miningAddr hxutil.Address
 	for i := 0; i < 100; i++ {
 		if miningAddr, err = walletClient.GetNewAddress("default"); err != nil {
 			time.Sleep(time.Duration(math.Log(float64(i+3))) * 50 * time.Millisecond)
