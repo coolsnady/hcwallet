@@ -1,6 +1,6 @@
 # RPC API Specification
 
-Version: 4.38.x
+Version: 4.25.x
 
 **Note:** This document assumes the reader is familiar with gRPC concepts.
 Refer to the [gRPC Concepts documentation](http://www.grpc.io/docs/guides/concepts.html)
@@ -84,14 +84,13 @@ rules of Semantic Versioning (SemVer) 2.0.0.
 ## `WalletLoaderService`
 
 The `WalletLoaderService` service provides the caller with functions related to
-the management of the wallet and its connection to the coolsnady network.  It has
+the management of the wallet and its connection to the Decred network.  It has
 no dependencies and is always running.
 
 **Methods:**
 
 - [`WalletExists`](#walletexists)
 - [`CreateWallet`](#createwallet)
-- [`CreateWatchingOnlyWallet`](#createwatchingonlywallet)
 - [`OpenWallet`](#openwallet)
 - [`CloseWallet`](#closewallet)
 - [`StartConsensusRpc`](#startconsensusrpc)
@@ -170,30 +169,6 @@ synchronizes the wallet to the consensus server if it was previously loaded.
 
 ___
 
-#### `CreateWatchingOnlyWallet`
-
-The `CreateWatchingOnlyWallet` method is used to create a watching only wallet.
-After creating a wallet, the `WalletService` service begins running.
-
-**Request:** `CreateWatchingOnlyWalletRequest`
-
-- `string extended_public_key`: The extended public key of the wallet.
-
-- `bytes public_passphrase`: The passphrase used for the outer wallet
-  encryption.  This passphrase protects data that is made public on the
-  blockchain.  If this passphrase has zero length, an insecure default is used
-  instead.
-
-**Response:** `CreateWatchingOnlyWalletReponse`
-
-**Expected errors:**
-
-- `FailedPrecondition`: The wallet is currently open.
-
-- `AlreadyExists`: A file already exists at the wallet database file path.
-
-___
-
 #### `OpenWallet`
 
 The `OpenWallet` method is used to open an existing wallet database.  If the
@@ -252,8 +227,8 @@ ___
 #### `StartConsensusRpc`
 
 The `StartConsensusRpc` method is used to provide clients the ability to
-dynamically start the hxd RPC client.  This RPC client is used for wallet
-syncing and publishing transactions to the coolsnady network.
+dynamically start the dcrd RPC client.  This RPC client is used for wallet
+syncing and publishing transactions to the Decred network.
 
 Since API version 3.0.0, starting the consensus server no longer automatically
 synchronizes the wallet to the consensus server if it was previously loaded.
@@ -262,8 +237,8 @@ synchronizes the wallet to the consensus server if it was previously loaded.
 
 - `string network_address`: The host/IP and optional port of the RPC server to
   connect to.  IP addresses may be IPv4 or IPv6.  If the port is missing, a
-  default port is chosen corresponding to the default hxd RPC port of the
-  active coolsnady network.
+  default port is chosen corresponding to the default dcrd RPC port of the
+  active Decred network.
 
 - `string username`: The RPC username required to authenticate to the RPC
   server.
@@ -402,26 +377,20 @@ The service provides the following methods:
 - [`ImportPrivateKey`](#importprivatekey)
 - [`ImportScript`](#importscript)
 - [`FundTransaction`](#fundtransaction)
-- [`UnspentOutputs`](#unspentoutputs)
 - [`ConstructTransaction`](#constructtransaction)
 - [`SignTransaction`](#signtransaction)
-- [`SignTransactions`](#signtransactions)
 - [`CreateSignature`](#createsignature)
 - [`PublishTransaction`](#publishtransaction)
-- [`PublishUnminedTransactions`](#publishunminedtransactions)
 - [`TicketPrice`](#ticketprice)
 - [`StakeInfo`](#stakeinfo)
 - [`PurchaseTickets`](#purchasetickets)
 - [`RevokeTickets`](#revoketickets)
 - [`LoadActiveDataFilters`](#loadactivedatafilters)
 - [`SignMessage`](#signmessage)
-- [`SignMessages`](#signmessages)
 - [`ValidateAddress`](#validateaddress)
 - [`TransactionNotifications`](#transactionnotifications)
 - [`AccountNotifications`](#accountnotifications)
 - [`ConfirmationNotifications`](#confirmationnotifications)
-- [`CommittedTickets`](#committedtickets)
-- [`BestBlock`](#bestblock)
 
 #### `Ping`
 
@@ -498,7 +467,7 @@ the wallet.
   - `string account_name`: The name of the account.
 
   - `int64 total_balance`: The total (zero-conf and immature) balance, counted
-    in Atoms.
+    in Satoshis.
 
   - `uint32 external_key_count`: The number of derived keys in the external
      key chain.
@@ -539,18 +508,18 @@ and unspendable immature coinbase balances.
 **Response:** `BalanceResponse`
 
 - `int64 total`: The total (zero-conf and immature) balance, counted in
-  Atoms.
+  Satoshis.
 
 - `int64 spendable`: The spendable balance, given some number of required
-  confirmations, counted in Atoms.  This equals the total balance when the
+  confirmations, counted in Satoshis.  This equals the total balance when the
   required number of confirmations is zero and there are no immature coinbase
   outputs.
 
 - `int64 immature_reward`: The total value of all immature coinbase outputs,
-  counted in Atoms.
+  counted in Satoshis.
 
 - `int64 immature_stake_generation`: The total value of all immature stakebase outputs,
-  or any revocations, counted in Atoms.
+  or any revocations, counted in Satoshis.
 
 - `int64 locked_by_tickets`: The total value of all tickets that are currently locked,
   and awaiting vote.
@@ -611,8 +580,6 @@ but not all sidechain blocks may be known by the wallet.
 - `bool stake_invalidated`: Whether the queried block is in the main chain and
   the next main chain block has stake invalidated the queried block.
 
-- `bool approves_parent`: Whether this block stake validates its parent block.
-
 **Expected errors:**
 
 - `InvalidArgument`: The block hash and height were each set to non-default
@@ -638,19 +605,10 @@ hash.
 
 **Response:** ` GetTransactionResponse`
 
-- `TransactionDetails transaction`: Wallet details regarding the transaction.
+- `TransactionDetails Transaction`: Wallet details regarding the transaction.
 
   The `TransactionDetails` message is used by other methods and is documented
   [here](#transactiondetails).
-
-- `int32 confirmations`: The number of block confirmations of the transaction in
-  the main chain.  If the transaction was mined in a stake-invalidated block and
-  pushed back to mempool to be mined again, or was mined again after being stake
-  invalidated, the latest number of confirmations is used (not the confirmations
-  of an invalidated block).
-
-- `bytes block_hash`: The block hash the transaction is most recently mined in,
-  or null if unmined.
 
 **Expected errors:**
 
@@ -669,7 +627,7 @@ ___
 The `GetTransactions` method queries the wallet for relevant transactions.  The
 query set may be specified using a block range, inclusive, with the heights or
 hashes of the minimum and maximum block.  Transaction results are grouped
-by the block they are mined in, or grouped together with other unmined
+grouped by the block they are mined in, or grouped together with other unmined
 transactions.
 
 To avoid exceeding the maximum message size with the return result, a stream is
@@ -701,14 +659,6 @@ transactions (and no mined transactions).
   `ending_block_hash` are set to their default values, no upper block limit is
   used and transactions through the best block and all unmined transactions are
   included.
-
-- `int32 target_transaction_count`: Try to return at most this amount of
-  transactions. Both mined and unmined transactions count towards this limit.
-  Note that as transactions are returned on a per-block basis, **more** than
-  this amount of transactions may be returned in total, to prevent transactions
-  from not being seen. The caller is responsible for further clipping of the
-  dataset if it has a hard requirement on the number of total transactions it
-  manages.
 
 **Response:** `stream GetTransactionsResponse`
 
@@ -782,11 +732,6 @@ results of a single ticket.
   used and transactions through the best block and all unmined transactions are
   included.
 
-- `int32 target_ticket_count`: Try to return at most this amount of tickets.
-  Both mined and unmined tickets count towards this limit. Note that the number
-  of tickets returned may be higher or lower than this specified target and
-  callers are responsible for further clipping of the dataset if required.
-
 **Response:** `stream GetTicketsResponse`
 
 - `TicketDetails tickets`: A given ticket's details.
@@ -821,23 +766,9 @@ results of a single ticket.
 
     - `REVOKED`: A ticket that has been revoked.
 
-- `BlockDetails block`: The block the ticket was mined. It is null if the
-   ticket hasn't been mined yet.
-
-  **Nested Message** `BlockDetails`
-
-  - `bytes hash`: The binary hash of the block.
-
-  - `int32 height`: The block height.
-
-  - `int64 timestamp`: The timestamp the block was mined.
-
-
 **Expected errors:**
 
 - `InvalidArgument`: A non-default block hash field did not have the correct length.
-
-- `InvalidArgument`: A negative target value was provided.
 
 - `Aborted`: The wallet database is closed.
 
@@ -1024,7 +955,7 @@ wallet.
 
 - `string address`: The payment address string.
 
-- `string public_key`: The public key encoded as a string in the coolsnady encoding
+- `string public_key`: The public key encoded as a string in the Decred encoding
   format.
 
 **Expected errors:**
@@ -1143,7 +1074,7 @@ transaction paying to already known addresses or scripts.
   set to query.
 
 - `int64 target_amount`: If positive, the service may limit output results to
-  those that sum to at least this amount (counted in Atoms).  If zero, all
+  those that sum to at least this amount (counted in Satoshis).  If zero, all
   outputs not excluded by other arguments are returned.  This may not be
   negative.
 
@@ -1170,7 +1101,7 @@ transaction paying to already known addresses or scripts.
   - `uint32 output_index`: The output index of the transaction this output
     originates from.
 
-  - `int64 amount`: The output value (counted in Atoms) of the unspent
+  - `int64 amount`: The output value (counted in Satoshis) of the unspent
     transaction output.
 
   - `bytes pk_script`: The output script of the unspent transaction output.
@@ -1191,72 +1122,6 @@ transaction paying to already known addresses or scripts.
   remaining amount to a newly-generated change address for the account.  This is
   null if `include_change_script` was false or the target amount was not
   exceeded.
-
-**Expected errors:**
-
-- `InvalidArgument`: The target amount is negative.
-
-- `InvalidArgument`: The required confirmations is negative.
-
-- `Aborted`: The wallet database is closed.
-
-- `NotFound`: The account does not exist.
-
-**Stability:** Unstable
-
-___
-
-#### `UnspentOutputs`
-
-The `UnspentOutputs` method queries the wallet for unspent transaction outputs
-controlled by some account.  Results may be refined by setting a target output
-amount and limiting the required confirmations.  The selection algorithm is
-unspecified.
-
-Output results are always created even if a minimum target output amount could
-not be reached.  This allows this method to behave similar to the `Balance`
-method while also including the outputs that make up that balance.
-
-**Request:** `UnspentOutputsRequest`
-
-- `uint32 account`: Account number containing the keys controlling the output
-  set to query.
-
-- `int64 target_amount`: If positive, the service may limit output results to
-  those that sum to at least this amount (counted in Atoms).  This may not be
-  negative.
-
-- `int32 required_confirmations`: The minimum number of block confirmations
-  needed to consider including an output in the return set.  This may not be
-  negative.
-
-- `bool include_immature_coinbases`: If true, immature coinbase outputs will
-  also be included.
-
-**Response:** `stream UnspentOutputResponse`
-
-- `bytes transaction_hash`: The hash of the transaction this output originates
-  from.
-
-- `uint32 output_index`: The output index of the transaction this output
-  originates from.
-
-- `int64 amount`: The output value (counted in atoms) of the unspent
-  transaction output.
-
-- `bytes pk_script`: The output script of the unspent transaction output.
-
-- `int64 receive_time`: The earliest Unix time the wallet became aware of the
-  transaction containing this output.
-
-- `bool from_coinbase`: Whether the output is a coinbase output.
-
-- `int32 tree`: The tree the output belongs to.  This can take on the values
-  `-1` (invalid), `0` (regular), and `1` (stake).
-
-- `int64 amount_sum`: The rolling sum of all streamed output amounts including
-  the current response. This may be less than a positive target amount if
-  there were not enough eligible outputs available.
 
 **Expected errors:**
 
@@ -1367,6 +1232,10 @@ transaction using a wallet private keys.
 
 - `bytes serialized_transaction`: The transaction to add input signatures to.
 
+- `repeated uint32 input_indexes`: The input indexes that signature scripts must
+  be created for.  If there are no indexes, input scripts are created for every
+  input that is missing an input script.
+
 - `repeated AdditionalScript additional_scripts`: Additional output scripts of
   previous outputs spent by the transaction that the wallet may not be aware of.
   Offline signing may require previous outputs to be provided to the wallet.
@@ -1390,63 +1259,17 @@ transaction using a wallet private keys.
 
 **Expected errors:**
 
+- `InvalidArgument`: The serialized transaction can not be decoded.
+
 - `Aborted`: The wallet database is closed.
 
 - `InvalidArgument`: The private passphrase is incorrect.
-
-- `InvalidArgument`: The serialized transaction can not be decoded.
 
 **Stability:** Unstable: It is unclear if the request should include an account,
   and only secrets of that account are used when creating input scripts.  It's
   also missing options similar to Core's signrawtransaction, such as the sighash
   flags and additional keys.
 
-  ___
-
-  #### `SignTransactions`
-
-  The `SignTransactions` method adds transaction input signatures to a set of
-  serialized transactions using a wallet private keys.
-
-  **Request:** `SignTransactionsRequest`
-
-  - `bytes passphrase`: The wallet's private passphrase.
-
-  - `repeated UnsignedTransaction unsigned_transaction`: - The unsigned transactions set.
-
-    **Nested message:** `UnsignedTransaction`
-
-    - `bytes serialized_transaction`: The transaction to add input signatures to.
-
-  - `repeated AdditionalScript additional_scripts`: Additional output scripts of
-  previous outputs spent by the transaction that the wallet may not be aware of.
-  Offline signing may require previous outputs to be provided to the wallet.
-
-    **Nested message:** `AdditionalScript`
-
-    - `bytes transaction_hash`: The transaction hash of the previous output.
-
-    - `uint32 output_index`: The output index of the previous output.
-
-    - `int32 tree`: The transaction tree the previous transaction belongs to.
-
-    - `bytes pk_script`: The output script of the previous output.
-
-  **Response:** `SignTransactionsResponse`
-
-  - `repeated SignedTransaction transactions`: The signed transaction set.
-
-    **Nested message:** `SignedTransaction`
-
-    - `bytes transaction`: The serialized transaction with added input scripts.
-
-  **Expected errors:**
-
-  - `Aborted`: The wallet database is closed.
-
-  - `InvalidArgument`: A serialized transaction can not be decoded.
-
-  - `InvalidArgument`: The private passphrase is incorrect.
 ___
 
 #### `CreateSignature`
@@ -1503,7 +1326,7 @@ ___
 #### `PublishTransaction`
 
 The `PublishTransaction` method publishes a signed, serialized transaction to
-the coolsnady network.  If the transaction spends any of the wallet's unspent
+the Decred network.  If the transaction spends any of the wallet's unspent
 outputs or creates a new output controlled by the wallet, it is saved by the
 wallet and republished later if it or a double spend are not mined.
 
@@ -1526,21 +1349,6 @@ wallet and republished later if it or a double spend are not mined.
 
 ___
 
-#### `PublishUnminedTransactions`
-
-The `PublishTransactions` method re-broadcasts all unmined transactions
-to the consensus RPC server so it can be propagated to other nodes
-and eventually mined.
-
-**Request:** `PublishUnminedTransactionsRequest`
-
-**Response:** `PublishUnminedTransactionsResponse`
-
-**Expected errors:**: None
-
-**Stability:** Unstable
-___
-
 #### `TicketPrice`
 
 The `TicketPrice` method returns the price of a ticket for the next block, also
@@ -1560,7 +1368,7 @@ syncing.
 **Stability:** Unstable: The ticket price and height are pulled from separate
 daemon passthroughs and may race. Ideally these would be returned from stored
 values in the wallet when it updates from incoming stake ticket price
-notifications passed from the JSON RPC of hxd. Right now, wallet block processing
+notifications passed from the JSON RPC of dcrd. Right now, wallet block processing
 is very slow and it's difficult for these notifications to stay in sync. In the
 future, this API may be completely removed in favour of a passthrough for that
 set of notifications.
@@ -1753,47 +1561,6 @@ of an address.
 signature algorithms other than secp256k1.
 
 ___
-
-#### `SignMessages`
-
-The `SignMessages` method creates a signature of multiple messages using the
-provided private keys and addresses.
-
-**Request:** `SignMessagesRequest`
-
-- `bytes passphrase`: The wallet's private passphrase.
-
-- `repeated Message messages`: Message that needs to be signed.
-
-  **Nested message:** `Message`
-
-  - `string address`: The associated address of the private key to use to sign
-    the message.  Must be P2PKH or P2PK.
-
-  - `string message`: The message to sign.
-
-**Response:** `SignMessageResponse`
-
-- `repeated SignReply replies`: Replies of all signing operations. Caller
-   must check the error field. The index of reply is identical to the incoming
-   messages.
-
-  **Nested message:** `SignReply`
-
-  - `bytes signature`: The signature of the message.
-
-  - `string error`: Human readable error if the signature command failed.
-    "" indicates success.
-
-**Expected errors:**
-
-- `InvalidArgument`: The private passphrase is incorrect.
-
-**Stability:** Unstable: this method may require API changes to support
-signature algorithms other than secp256k1.
-
-___
-
 #### `ValidateAddress`
 
 The `ValidateAddress` method verifies if an address is valid.
@@ -1823,41 +1590,6 @@ The `ValidateAddress` method verifies if an address is valid.
 - `bytes pay_to_addr_script`: The redeem script.
 
 - `uint32 sigs_required`: The number of signatures required.
-___
-
-#### `CommittedTickets`
-
-The `CommittedTickets` method returns the matching ticket purchase hashes and
-addresses for which the largest commitment is controlled by this wallet.
-
-**Request:** `CommittedTicketsRequest`
-
-- `repeated bytes tickets`: The hashes of tickets that are being verified.
-
-**Response:** `CommittedTicketsResponse`
-
-- `repeated TicketAddresses ticketAddresses`: The hashes and addresses that are
-  controlled by this wallet.
-
-  **Nested message:** `TicketAddresses`
-
-  - `bytes Ticket`: Hash of the ticket.
-
-  - `string address`: Address of the largest commitment.
-___
-
-#### `BestBlock`
-
-The `BestBlock` method returns the block height and height of the best block on
-the main chain.
-
-**Request:** `BestBlockRequest`
-
-**Response:** `BestBlockResponse`
-
-- `bytes hash`: The hash of the best block.
-
-- `uint32 height`: The height of the best block.
 ___
 
 #### `TransactionNotifications`
@@ -2004,8 +1736,6 @@ wallet's relevant transactions contained therein.
 
   The `TransactionDetails` message is used by other methods and is documented
   [here](#transactiondetails).
-
-- `bool approves_parent`: Whether this block stake validates its parent block.
 
 **Stability**: Unstable: This should probably include the block version.
 

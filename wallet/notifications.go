@@ -1,5 +1,5 @@
 // Copyright (c) 2015-2016 The btcsuite developers
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -13,14 +13,14 @@ import (
 	"github.com/coolsnady/hxd/blockchain"
 	"github.com/coolsnady/hxd/blockchain/stake"
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/dcrutil"
-	"github.com/coolsnady/hxd/hdkeychain"
-	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
 	"github.com/coolsnady/hxd/txscript"
 	"github.com/coolsnady/hxd/wire"
-	"github.com/coolsnady/hxwallet/errors"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
+	"github.com/coolsnady/hxd/hdkeychain"
+	"github.com/coolsnady/hxwallet/apperrors"
 	"github.com/coolsnady/hxwallet/wallet/udb"
+	"github.com/coolsnady/hxwallet/walletdb"
 )
 
 // TODO: It would be good to send errors during notification creation to the rpc
@@ -321,7 +321,7 @@ func (s *NotificationServer) notifyMinedTransaction(dbtx walletdb.ReadTx, detail
 		s.currentTxNtfn = &TransactionNotifications{}
 	}
 	n := len(s.currentTxNtfn.AttachedBlocks)
-	if n == 0 || s.currentTxNtfn.AttachedBlocks[n-1].Header.BlockHash() != block.Hash {
+	if n == 0 || *s.currentTxNtfn.AttachedBlocks[n-1].Hash != block.Hash {
 		return
 	}
 	txs := &s.currentTxNtfn.AttachedBlocks[n-1].Transactions
@@ -336,9 +336,11 @@ func (s *NotificationServer) notifyAttachedBlock(dbtx walletdb.ReadTx, block *wi
 	// Add block details if it wasn't already included for previously
 	// notified mined transactions.
 	n := len(s.currentTxNtfn.AttachedBlocks)
-	if n == 0 || s.currentTxNtfn.AttachedBlocks[n-1].Header.BlockHash() != *blockHash {
+	if n == 0 || *s.currentTxNtfn.AttachedBlocks[n-1].Hash != *blockHash {
 		s.currentTxNtfn.AttachedBlocks = append(s.currentTxNtfn.AttachedBlocks, Block{
-			Header: block,
+			Hash:      blockHash,
+			Height:    int32(block.Height),
+			Timestamp: block.Timestamp.Unix(),
 		})
 	}
 }
@@ -424,7 +426,9 @@ type TransactionNotifications struct {
 // Block contains the properties and all relevant transactions of an attached
 // block.
 type Block struct {
-	Header       *wire.BlockHeader // Nil if referring to mempool
+	Hash         *chainhash.Hash
+	Height       int32
+	Timestamp    int64
 	Transactions []TransactionSummary
 }
 
@@ -499,11 +503,11 @@ const (
 func TxTransactionType(tx *wire.MsgTx) TransactionType {
 	if blockchain.IsCoinBaseTx(tx) {
 		return TransactionTypeCoinbase
-	} else if stake.IsSStx(tx) {
+	} else if ok := stake.IsSStx(tx); ok {
 		return TransactionTypeTicketPurchase
-	} else if stake.IsSSGen(tx) {
+	} else if ok = stake.IsSSGen(tx); ok {
 		return TransactionTypeVote
-	} else if stake.IsSSRtx(tx) {
+	} else if ok = stake.IsSSRtx(tx); ok {
 		return TransactionTypeRevocation
 	} else {
 		return TransactionTypeRegular
@@ -835,7 +839,7 @@ func (c *ConfirmationNotificationsClient) Watch(txHashes []*chainhash.Hash, stop
 			height, err := w.TxStore.TxBlockHeight(dbtx, h)
 			var confs int32
 			switch {
-			case errors.Is(errors.NotExist, err):
+			case apperrors.IsError(err, apperrors.ErrValueNoExists):
 				confs = -1
 			default:
 				confs = confirms(height, tipHeight)
@@ -853,7 +857,7 @@ func (c *ConfirmationNotificationsClient) Watch(txHashes []*chainhash.Hash, stop
 				if err != nil {
 					return err
 				}
-				blockHash, err := w.TxStore.GetMainChainBlockHashForHeight(txmgrNs, height)
+				blockHash, err := w.TxStore.GetBlockHash(txmgrNs, height)
 				if err != nil {
 					return err
 				}
@@ -916,7 +920,7 @@ func (c *ConfirmationNotificationsClient) process(tipHeight int32) {
 			height, err := w.TxStore.TxBlockHeight(dbtx, &txHash)
 			var confs int32
 			switch {
-			case errors.Is(errors.NotExist, err):
+			case apperrors.IsError(err, apperrors.ErrValueNoExists):
 				confs = -1
 			default:
 				confs = confirms(height, tipHeight)
@@ -934,7 +938,7 @@ func (c *ConfirmationNotificationsClient) process(tipHeight int32) {
 				if err != nil {
 					return err
 				}
-				blockHash, err := w.TxStore.GetMainChainBlockHashForHeight(txmgrNs, height)
+				blockHash, err := w.TxStore.GetBlockHash(txmgrNs, height)
 				if err != nil {
 					return err
 				}

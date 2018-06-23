@@ -1,5 +1,5 @@
 // Copyright (c) 2013-2016 The btcsuite developers
-// Copyright (c) 2015-2017 The coolsnady developers
+// Copyright (c) 2015-2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -7,22 +7,24 @@ package udb
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/coolsnady/hxd/blockchain/stake"
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
 	"github.com/coolsnady/hxd/wire"
-	"github.com/coolsnady/hxwallet/errors"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
+	"github.com/coolsnady/hxwallet/apperrors"
+	"github.com/coolsnady/hxwallet/walletdb"
 )
 
 // InsertMemPoolTx inserts a memory pool transaction record.  It also marks
 // previous outputs referenced by its inputs as spent.  Errors with the
-// DoubleSpend code if another unmined transaction is a double spend of this
-// transaction.
+// apperrors.ErrDoubleSpend code if another unmined transaction is a double
+// spend of this transaction.
 func (s *Store) InsertMemPoolTx(ns walletdb.ReadWriteBucket, rec *TxRecord) error {
 	_, recVal := latestTxRecord(ns, rec.Hash[:])
 	if recVal != nil {
-		return errors.E(errors.Exist, "transaction already exists mined")
+		const str = "transaction already exists mined"
+		return apperrors.New(apperrors.ErrDuplicate, str)
 	}
 
 	v := existsRawUnmined(ns, rec.Hash[:])
@@ -36,8 +38,8 @@ func (s *Store) InsertMemPoolTx(ns walletdb.ReadWriteBucket, rec *TxRecord) erro
 	// existing unmined txs are not removed when inserting a double spending
 	// unmined tx.
 	//
-	// An exception is made for this rule for votes and revocations that double
-	// spend an unmined vote that doesn't vote on the tip block.
+	// An exception is made for this rule for revocations that double spend an
+	// unmined vote that doesn't vote on the tip block.
 	for _, input := range rec.MsgTx.TxIn {
 		prevOut := &input.PreviousOutPoint
 		k := canonicalOutPoint(&prevOut.Hash, prevOut.Index)
@@ -47,23 +49,27 @@ func (s *Store) InsertMemPoolTx(ns walletdb.ReadWriteBucket, rec *TxRecord) erro
 
 			// A switch is used here instead of an if statement so it can be
 			// broken out of to the error below.
-		DoubleSpendVoteCheck:
-			switch rec.TxType {
-			case stake.TxTypeSSGen, stake.TxTypeSSRtx:
+		RevocationCheck:
+			switch {
+			case rec.TxType == stake.TxTypeSSRtx:
 				spenderVal := existsRawUnmined(ns, spenderHash[:])
 				spenderTxBytes := extractRawUnminedTx(spenderVal)
 				var spenderTx wire.MsgTx
 				err := spenderTx.Deserialize(bytes.NewReader(spenderTxBytes))
 				if err != nil {
-					return errors.E(errors.IO, err)
+					str := fmt.Sprintf("failed to deserialize unmined "+
+						"transaction %v", &spenderHash)
+					return apperrors.Wrap(err, apperrors.ErrData, str)
 				}
 				if stake.DetermineTxType(&spenderTx) != stake.TxTypeSSGen {
-					break DoubleSpendVoteCheck
+					break RevocationCheck
 				}
 				votedBlock, _ := stake.SSGenBlockVotedOn(&spenderTx)
 				tipBlock, _ := s.MainChainTip(ns)
 				if votedBlock == tipBlock {
-					return errors.E(errors.DoubleSpend, "vote or revocation double spends unmined vote on the tip block")
+					const str = "revocation double spends unmined vote on " +
+						"the tip block"
+					return apperrors.New(apperrors.ErrDoubleSpend, str)
 				}
 
 				err = s.removeUnconfirmed(ns, &spenderTx, &spenderHash)
@@ -73,12 +79,13 @@ func (s *Store) InsertMemPoolTx(ns walletdb.ReadWriteBucket, rec *TxRecord) erro
 				continue
 			}
 
-			err := errors.Errorf("%v conflicts with %v by double spending %v", &rec.Hash, &spenderHash, prevOut)
-			return errors.E(errors.DoubleSpend, err)
+			str := fmt.Sprintf("unmined transaction %v is a double spend of "+
+				"unmined transaction %v", &rec.Hash, &spenderHash)
+			return apperrors.New(apperrors.ErrDoubleSpend, str)
 		}
 	}
 
-	log.Infof("Inserting unconfirmed transaction %v", &rec.Hash)
+	log.Infof("Inserting unconfirmed transaction %v", rec.Hash)
 	v, err := valueTxRecord(rec)
 	if err != nil {
 		return err
@@ -274,76 +281,4 @@ func (s *Store) unminedTxHashes(ns walletdb.ReadBucket) ([]*chainhash.Hash, erro
 		return err
 	})
 	return hashes, err
-}
-
-// PruneUnmined removes unmined transactions that no longer belong in the
-// unmined tx set.  This includes:
-//
-//   * Any transactions past a set expiry
-//   * Ticket purchases with a different ticket price than the passed stake
-//     difficulty
-//   * Votes that do not vote on the tip block
-func (s *Store) PruneUnmined(dbtx walletdb.ReadWriteTx, stakeDiff int64) error {
-	ns := dbtx.ReadWriteBucket(wtxmgrBucketKey)
-
-	tipHash, tipHeight := s.MainChainTip(ns)
-
-	type removeTx struct {
-		tx   wire.MsgTx
-		hash *chainhash.Hash
-	}
-	var toRemove []*removeTx
-
-	c := ns.NestedReadBucket(bucketUnmined).ReadCursor()
-	for k, v := c.First(); k != nil; k, v = c.Next() {
-		var tx wire.MsgTx
-		err := tx.Deserialize(bytes.NewReader(extractRawUnminedTx(v)))
-		if err != nil {
-			return errors.E(errors.IO, err)
-		}
-
-		var expired, isTicketPurchase, isVote bool
-		switch {
-		case tx.Expiry != wire.NoExpiryValue && tx.Expiry <= uint32(tipHeight):
-			expired = true
-		case stake.IsSStx(&tx):
-			isTicketPurchase = true
-			if tx.TxOut[0].Value == stakeDiff {
-				continue
-			}
-		case stake.IsSSGen(&tx):
-			isVote = true
-			// This will never actually error
-			votedBlockHash, _ := stake.SSGenBlockVotedOn(&tx)
-			if votedBlockHash == tipHash {
-				continue
-			}
-		default:
-			continue
-		}
-
-		txHash, err := chainhash.NewHash(k)
-		if err != nil {
-			return errors.E(errors.IO, err)
-		}
-
-		if expired {
-			log.Infof("Removing expired unmined transaction %v", txHash)
-		} else if isTicketPurchase {
-			log.Infof("Removing old unmined ticket purchase %v", txHash)
-		} else if isVote {
-			log.Infof("Removing missed or invalid vote %v", txHash)
-		}
-
-		toRemove = append(toRemove, &removeTx{tx, txHash})
-	}
-
-	for _, r := range toRemove {
-		err := s.removeUnconfirmed(ns, &r.tx, r.hash)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }

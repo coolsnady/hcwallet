@@ -1,25 +1,34 @@
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 package txrules
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"sync"
 
 	"github.com/coolsnady/hxd/blockchain"
 	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxd/dcrutil"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 )
 
-// ValidPoolFeeRate tests to see if a pool fee is a valid percentage from
+// maxPoolFeeRate is the maximum value of the pool fee
+const maxPoolFeeRate = 10000.0
+
+// IsValidPoolFeeRate tests to see if a pool fee is a valid percentage from
 // 0.01% to 100.00%.
-func ValidPoolFeeRate(feeRate float64) bool {
+func IsValidPoolFeeRate(feeRate float64) error {
 	poolFeeRateTest := feeRate * 100
 	poolFeeRateTest = math.Floor(poolFeeRateTest)
-	return poolFeeRateTest >= 1.0 && poolFeeRateTest <= 10000.0
+	if poolFeeRateTest <= 0.0 || poolFeeRateTest > maxPoolFeeRate {
+		return fmt.Errorf("invalid pool fee %v, pool fee "+
+			"must be between 0.01 and 100.00", feeRate)
+	}
+
+	return nil
 }
 
 var subsidyCache *blockchain.SubsidyCache

@@ -1,5 +1,5 @@
 // Copyright (c) 2014 The btcsuite developers
-// Copyright (c) 2015-2018 The coolsnady developers
+// Copyright (c) 2015 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -8,10 +8,12 @@ package udb
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"fmt"
 	"time"
 
-	"github.com/coolsnady/hxwallet/errors"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	"github.com/coolsnady/hxwallet/apperrors"
+	"github.com/coolsnady/hxwallet/walletdb"
 )
 
 var (
@@ -25,6 +27,19 @@ var (
 // wallet seed and private passphrase.
 type ObtainUserInputFunc func() ([]byte, error)
 
+// maybeConvertDbError converts the passed error to a ManagerError with an
+// error code of ErrDatabase if it is not already a ManagerError.  This is
+// useful for potential errors returned from managed transaction an other parts
+// of the walletdb database.
+func maybeConvertDbError(err error) error {
+	// When the error is already a ManagerError, just return it.
+	if _, ok := err.(apperrors.E); ok {
+		return err
+	}
+
+	return managerError(apperrors.ErrDatabase, err.Error(), err)
+}
+
 // syncStatus represents a address synchronization status stored in the
 // database.
 type syncStatus uint8
@@ -34,9 +49,9 @@ type syncStatus uint8
 // NOTE: These are currently unused but are being defined for the possibility of
 // supporting sync status on a per-address basis.
 const (
-	ssNone    syncStatus = 0 // not iota as they need to be stable for db
-	ssPartial syncStatus = 1
-	ssFull    syncStatus = 2
+	SSNone    syncStatus = 0 // not iota as they need to be stable for db
+	SSPartial syncStatus = 1
+	SSFull    syncStatus = 2
 )
 
 // addressType represents a type of address stored in the database.
@@ -54,12 +69,14 @@ type accountType uint8
 
 // These constants define the various supported account types.
 const (
-	actBIP0044 accountType = 0 // not iota as they need to be stable for db
+	actBIP0044 uint8 = 0 // not iota as they need to be stable for db
+	actBliss   uint8 = 1
+	actMSS     uint8 = 2
 )
 
 // dbAccountRow houses information stored about an account in the database.
 type dbAccountRow struct {
-	acctType accountType
+	acctType uint8
 	rawData  []byte // Varies based on account type field.
 }
 
@@ -102,6 +119,7 @@ type dbImportedAddressRow struct {
 	dbAddressRow
 	encryptedPubKey  []byte
 	encryptedPrivKey []byte
+	algType          uint8
 }
 
 // dbImportedAddressRow houses additional information stored about a script
@@ -151,6 +169,8 @@ var (
 	// e.g. last account number
 	metaBucketName = []byte("meta")
 
+	blissaddrIdxBucketName = []byte("blissaddridx")
+
 	// addrPoolMetaKeyLen is the byte length of the address pool
 	// prefixes. It is 11 bytes for the prefix and 4 bytes for
 	// the account number.
@@ -185,18 +205,15 @@ var (
 	mgrCreateDateName = []byte("mgrcreated")
 
 	// Crypto related key names (main bucket).
-	seedName                    = []byte("seed")
-	masterPrivKeyName           = []byte("mpriv")
-	masterPubKeyName            = []byte("mpub")
-	cryptoPrivKeyName           = []byte("cpriv")
-	cryptoPubKeyName            = []byte("cpub")
-	cryptoScriptKeyName         = []byte("cscript")
-	coinTypeLegacyPrivKeyName   = []byte("ctpriv")
-	coinTypeLegacyPubKeyName    = []byte("ctpub")
-	coinTypeSLIP0044PrivKeyName = []byte("ctpriv-slip0044")
-	coinTypeSLIP0044PubKeyName  = []byte("ctpub-slip0044")
-	watchingOnlyName            = []byte("watchonly")
-	slip0044Account0RowName     = []byte("slip0044acct0")
+	seedName            = []byte("seed")
+	masterPrivKeyName   = []byte("mpriv")
+	masterPubKeyName    = []byte("mpub")
+	cryptoPrivKeyName   = []byte("cpriv")
+	cryptoPubKeyName    = []byte("cpub")
+	cryptoScriptKeyName = []byte("cscript")
+	coinTypePrivKeyName = []byte("ctpriv")
+	coinTypePubKeyName  = []byte("ctpub")
+	watchingOnlyName    = []byte("watchonly")
 
 	// Used addresses (used bucket).  This was removed by database version 2.
 	usedAddrBucketName = []byte("usedaddrs")
@@ -230,7 +247,8 @@ func fetchManagerVersion(ns walletdb.ReadBucket) (uint32, error) {
 	mainBucket := ns.NestedReadBucket(mainBucketName)
 	verBytes := mainBucket.Get(mgrVersionName)
 	if verBytes == nil {
-		return 0, errors.E(errors.IO, "missing address manager version")
+		str := "required version number not stored in database"
+		return 0, managerError(apperrors.ErrDatabase, str, nil)
 	}
 	version := binary.LittleEndian.Uint32(verBytes)
 	return version, nil
@@ -244,7 +262,8 @@ func putManagerVersion(ns walletdb.ReadWriteBucket, version uint32) error {
 	verBytes := uint32ToBytes(version)
 	err := bucket.Put(mgrVersionName, verBytes)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := "failed to store version"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 	return nil
 }
@@ -259,7 +278,9 @@ func fetchMasterKeyParams(ns walletdb.ReadBucket) ([]byte, []byte, error) {
 	// Load the master public key parameters.  Required.
 	val := bucket.Get(masterPubKeyName)
 	if val == nil {
-		return nil, nil, errors.E(errors.IO, "missing master pubkey params")
+		str := "required master public key parameters not stored in " +
+			"database"
+		return nil, nil, managerError(apperrors.ErrDatabase, str, nil)
 	}
 	pubParams := make([]byte, len(val))
 	copy(pubParams, val)
@@ -284,14 +305,16 @@ func putMasterKeyParams(ns walletdb.ReadWriteBucket, pubParams, privParams []byt
 	if privParams != nil {
 		err := bucket.Put(masterPrivKeyName, privParams)
 		if err != nil {
-			return errors.E(errors.IO, err)
+			str := "failed to store master private key parameters"
+			return managerError(apperrors.ErrDatabase, str, err)
 		}
 	}
 
 	if pubParams != nil {
 		err := bucket.Put(masterPubKeyName, pubParams)
 		if err != nil {
-			return errors.E(errors.IO, err)
+			str := "failed to store master public key parameters"
+			return managerError(apperrors.ErrDatabase, str, err)
 		}
 	}
 
@@ -299,75 +322,43 @@ func putMasterKeyParams(ns walletdb.ReadWriteBucket, pubParams, privParams []byt
 }
 
 // fetchCoinTypeKeys loads the encrypted cointype keys which are in turn used to
-// derive the extended keys for all accounts.  If both the legacy and SLIP0044
-// coin type keys are saved, the legacy keys are used for backwards
-// compatibility reasons.
+// derive the extended keys for all accounts.
 func fetchCoinTypeKeys(ns walletdb.ReadBucket) ([]byte, []byte, error) {
 	bucket := ns.NestedReadBucket(mainBucketName)
 
-	var coinTypeSLIP0044 bool
-
-	coinTypePubKeyEnc := bucket.Get(coinTypeLegacyPubKeyName)
+	coinTypePubKeyEnc := bucket.Get(coinTypePubKeyName)
 	if coinTypePubKeyEnc == nil {
-		coinTypeSLIP0044 = true
-		coinTypePubKeyEnc = bucket.Get(coinTypeSLIP0044PubKeyName)
-	}
-	if coinTypePubKeyEnc == nil {
-		return nil, nil, errors.E(errors.IO, "missing encrypted cointype pubkey")
+		str := "required encrypted cointype public key not stored in database"
+		return nil, nil, managerError(apperrors.ErrDatabase, str, nil)
 	}
 
-	coinTypePrivKeyName := coinTypeLegacyPrivKeyName
-	if coinTypeSLIP0044 {
-		coinTypePrivKeyName = coinTypeSLIP0044PrivKeyName
-	}
 	coinTypePrivKeyEnc := bucket.Get(coinTypePrivKeyName)
 	if coinTypePrivKeyEnc == nil {
-		return nil, nil, errors.E(errors.IO, "missing encrypted cointype privkey")
+		str := "required encrypted cointype private key not stored in database"
+		return nil, nil, managerError(apperrors.ErrDatabase, str, nil)
 	}
-
 	return coinTypePubKeyEnc, coinTypePrivKeyEnc, nil
 }
 
-// putCoinTypeLegacyKeys stores the encrypted legacy cointype keys which are in
-// turn used to derive the extended keys for all accounts.  Either parameter can
-// be nil in which case no value is written for the parameter.
-func putCoinTypeLegacyKeys(ns walletdb.ReadWriteBucket, coinTypePubKeyEnc []byte, coinTypePrivKeyEnc []byte) error {
+// putCoinTypeKeys stores the encrypted cointype keys which are in turn used to
+// derive the extended keys for all accounts.  Either parameter can be nil in which
+// case no value is written for the parameter.
+func putCoinTypeKeys(ns walletdb.ReadWriteBucket, coinTypePubKeyEnc []byte, coinTypePrivKeyEnc []byte) error {
 	bucket := ns.NestedReadWriteBucket(mainBucketName)
 
 	if coinTypePubKeyEnc != nil {
-		err := bucket.Put(coinTypeLegacyPubKeyName, coinTypePubKeyEnc)
+		err := bucket.Put(coinTypePubKeyName, coinTypePubKeyEnc)
 		if err != nil {
-			return errors.E(errors.IO, err)
+			str := "failed to store encrypted cointype public key"
+			return managerError(apperrors.ErrDatabase, str, err)
 		}
 	}
 
 	if coinTypePrivKeyEnc != nil {
-		err := bucket.Put(coinTypeLegacyPrivKeyName, coinTypePrivKeyEnc)
+		err := bucket.Put(coinTypePrivKeyName, coinTypePrivKeyEnc)
 		if err != nil {
-			return errors.E(errors.IO, err)
-		}
-	}
-
-	return nil
-}
-
-// putCoinTypeSLIP0044Keys stores the encrypted SLIP0044 cointype keys which are
-// in turn used to derive the extended keys for all accounts.  Either parameter
-// can be nil in which case no value is written for the parameter.
-func putCoinTypeSLIP0044Keys(ns walletdb.ReadWriteBucket, coinTypePubKeyEnc []byte, coinTypePrivKeyEnc []byte) error {
-	bucket := ns.NestedReadWriteBucket(mainBucketName)
-
-	if coinTypePubKeyEnc != nil {
-		err := bucket.Put(coinTypeSLIP0044PubKeyName, coinTypePubKeyEnc)
-		if err != nil {
-			return errors.E(errors.IO, err)
-		}
-	}
-
-	if coinTypePrivKeyEnc != nil {
-		err := bucket.Put(coinTypeSLIP0044PrivKeyName, coinTypePrivKeyEnc)
-		if err != nil {
-			return errors.E(errors.IO, err)
+			str := "failed to store encrypted cointype private key"
+			return managerError(apperrors.ErrDatabase, str, err)
 		}
 	}
 
@@ -384,7 +375,8 @@ func fetchCryptoKeys(ns walletdb.ReadBucket) ([]byte, []byte, []byte, error) {
 	// Load the crypto public key parameters.  Required.
 	val := bucket.Get(cryptoPubKeyName)
 	if val == nil {
-		return nil, nil, nil, errors.E(errors.IO, "missing encrypted crypto pubkey")
+		str := "required encrypted crypto public not stored in database"
+		return nil, nil, nil, managerError(apperrors.ErrDatabase, str, nil)
 	}
 	pubKey := make([]byte, len(val))
 	copy(pubKey, val)
@@ -417,21 +409,24 @@ func putCryptoKeys(ns walletdb.ReadWriteBucket, pubKeyEncrypted, privKeyEncrypte
 	if pubKeyEncrypted != nil {
 		err := bucket.Put(cryptoPubKeyName, pubKeyEncrypted)
 		if err != nil {
-			return errors.E(errors.IO, err)
+			str := "failed to store encrypted crypto public key"
+			return managerError(apperrors.ErrDatabase, str, err)
 		}
 	}
 
 	if privKeyEncrypted != nil {
 		err := bucket.Put(cryptoPrivKeyName, privKeyEncrypted)
 		if err != nil {
-			return errors.E(errors.IO, err)
+			str := "failed to store encrypted crypto private key"
+			return managerError(apperrors.ErrDatabase, str, err)
 		}
 	}
 
 	if scriptKeyEncrypted != nil {
 		err := bucket.Put(cryptoScriptKeyName, scriptKeyEncrypted)
 		if err != nil {
-			return errors.E(errors.IO, err)
+			str := "failed to store encrypted crypto script key"
+			return managerError(apperrors.ErrDatabase, str, err)
 		}
 	}
 
@@ -444,7 +439,8 @@ func fetchWatchingOnly(ns walletdb.ReadBucket) (bool, error) {
 
 	buf := bucket.Get(watchingOnlyName)
 	if len(buf) != 1 {
-		return false, errors.E(errors.IO, errors.Errorf("bad watching-only flag len %d", len(buf)))
+		str := "malformed watching-only flag stored in database"
+		return false, managerError(apperrors.ErrDatabase, str, nil)
 	}
 
 	return buf[0] != 0, nil
@@ -460,7 +456,8 @@ func putWatchingOnly(ns walletdb.ReadWriteBucket, watchingOnly bool) error {
 	}
 
 	if err := bucket.Put(watchingOnlyName, []byte{encoded}); err != nil {
-		return errors.E(errors.IO, err)
+		str := "failed to store watching only flag"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 	return nil
 }
@@ -477,11 +474,13 @@ func deserializeAccountRow(accountID []byte, serializedAccount []byte) (*dbAccou
 	// Given the above, the length of the entry must be at a minimum
 	// the constant value sizes.
 	if len(serializedAccount) < 5 {
-		return nil, errors.E(errors.IO, errors.Errorf("bad account len %d", len(serializedAccount)))
+		str := fmt.Sprintf("malformed serialized account for key %x",
+			accountID)
+		return nil, managerError(apperrors.ErrDatabase, str, nil)
 	}
 
 	row := dbAccountRow{}
-	row.acctType = accountType(serializedAccount[0])
+	row.acctType = uint8(serializedAccount[0])
 	rdlen := binary.LittleEndian.Uint32(serializedAccount[1:5])
 	row.rawData = make([]byte, rdlen)
 	copy(row.rawData, serializedAccount[5:5+rdlen])
@@ -518,9 +517,12 @@ func deserializeBIP0044AccountRow(accountID []byte, row *dbAccountRow, dbVersion
 	// Given the above, the length of the entry must be at a minimum
 	// the constant value sizes.
 	switch {
-	case dbVersion < 5 && len(row.rawData) < 20,
-		dbVersion >= 5 && len(row.rawData) < 28:
-		return nil, errors.E(errors.IO, errors.Errorf("bip0044 account %x bad len %d", len(row.rawData)))
+	case dbVersion < 5 && len(row.rawData) < 20:
+		fallthrough
+	case dbVersion >= 5 && len(row.rawData) < 28:
+		str := fmt.Sprintf("malformed serialized bip0044 account for "+
+			"key %x", accountID)
+		return nil, managerError(apperrors.ErrDatabase, str, nil)
 	}
 
 	retRow := dbBIP0044AccountRow{
@@ -612,11 +614,11 @@ func serializeBIP0044AccountRow(row *dbBIP0044AccountRow, dbVersion uint32) []by
 
 func bip0044AccountInfo(pubKeyEnc, privKeyEnc []byte, nextExtIndex, nextIntIndex,
 	lastUsedExtIndex, lastUsedIntIndex, lastRetExtIndex, lastRetIntIndex uint32,
-	name string, dbVersion uint32) *dbBIP0044AccountRow {
+	name string, acctype uint8, dbVersion uint32) *dbBIP0044AccountRow {
 
 	row := &dbBIP0044AccountRow{
 		dbAccountRow: dbAccountRow{
-			acctType: actBIP0044,
+			acctType: acctype,
 			rawData:  nil,
 		},
 		pubKeyEncrypted:           pubKeyEnc,
@@ -666,7 +668,9 @@ func fetchLastAccount(ns walletdb.ReadBucket) (uint32, error) {
 
 	val := bucket.Get(lastAccountName)
 	if len(val) != 4 {
-		return 0, errors.E(errors.IO, errors.Errorf("bad last account len %d", len(val)))
+		str := fmt.Sprintf("malformed metadata '%s' stored in database",
+			lastAccountName)
+		return 0, managerError(apperrors.ErrDatabase, str, nil)
 	}
 	account := binary.LittleEndian.Uint32(val[0:4])
 	return account, nil
@@ -679,7 +683,8 @@ func fetchAccountName(ns walletdb.ReadBucket, account uint32) (string, error) {
 
 	val := bucket.Get(uint32ToBytes(account))
 	if val == nil {
-		return "", errors.E(errors.NotExist, errors.Errorf("no account %d", account))
+		str := fmt.Sprintf("account %d not found", account)
+		return "", managerError(apperrors.ErrAccountNotFound, str, nil)
 	}
 	offset := uint32(0)
 	nameLen := binary.LittleEndian.Uint32(val[offset : offset+4])
@@ -695,7 +700,8 @@ func fetchAccountByName(ns walletdb.ReadBucket, name string) (uint32, error) {
 
 	val := bucket.Get(stringToBytes(name))
 	if val == nil {
-		return 0, errors.E(errors.NotExist, errors.Errorf("no account %q", name))
+		str := fmt.Sprintf("account name '%s' not found", name)
+		return 0, managerError(apperrors.ErrAccountNotFound, str, nil)
 	}
 
 	return binary.LittleEndian.Uint32(val), nil
@@ -709,7 +715,8 @@ func fetchAccountInfo(ns walletdb.ReadBucket, account uint32, dbVersion uint32) 
 	accountID := uint32ToBytes(account)
 	serializedRow := bucket.Get(accountID)
 	if serializedRow == nil {
-		return nil, errors.E(errors.NotExist, errors.Errorf("no account %d", account))
+		str := fmt.Sprintf("account %d not found", account)
+		return nil, managerError(apperrors.ErrAccountNotFound, str, nil)
 	}
 
 	row, err := deserializeAccountRow(accountID, serializedRow)
@@ -717,12 +724,12 @@ func fetchAccountInfo(ns walletdb.ReadBucket, account uint32, dbVersion uint32) 
 		return nil, err
 	}
 
-	switch row.acctType {
-	case actBIP0044:
+	if row.acctType == 0 || row.acctType == 1 || row.acctType == 2 {
 		return deserializeBIP0044AccountRow(accountID, row, dbVersion)
 	}
 
-	return nil, errors.E(errors.IO, errors.Errorf("unknown account type %d", row.acctType))
+	str := fmt.Sprintf("unsupported account type '%d'", row.acctType)
+	return nil, managerError(apperrors.ErrDatabase, str, nil)
 }
 
 // deleteAccountNameIndex deletes the given key from the account name index of the database.
@@ -732,7 +739,8 @@ func deleteAccountNameIndex(ns walletdb.ReadWriteBucket, name string) error {
 	// Delete the account name key
 	err := bucket.Delete(stringToBytes(name))
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := fmt.Sprintf("failed to delete account name index key %s", name)
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 	return nil
 }
@@ -744,7 +752,8 @@ func deleteAccountIDIndex(ns walletdb.ReadWriteBucket, account uint32) error {
 	// Delete the account id key
 	err := bucket.Delete(uint32ToBytes(account))
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := fmt.Sprintf("failed to delete account id index key %d", account)
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 	return nil
 }
@@ -756,7 +765,8 @@ func putAccountNameIndex(ns walletdb.ReadWriteBucket, account uint32, name strin
 	// Write the account number keyed by the account name.
 	err := bucket.Put(stringToBytes(name), uint32ToBytes(account))
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := fmt.Sprintf("failed to store account name index key %s", name)
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 	return nil
 }
@@ -768,7 +778,8 @@ func putAccountIDIndex(ns walletdb.ReadWriteBucket, account uint32, name string)
 	// Write the account number keyed by the account id.
 	err := bucket.Put(uint32ToBytes(account), stringToBytes(name))
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := fmt.Sprintf("failed to store account id index key %s", name)
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 	return nil
 }
@@ -780,17 +791,18 @@ func putAddrAccountIndex(ns walletdb.ReadWriteBucket, account uint32, addrHash [
 	// Write account keyed by address hash
 	err := bucket.Put(addrHash, uint32ToBytes(account))
 	if err != nil {
-		return errors.E(errors.IO, err)
+		return nil
 	}
 
 	bucket, err = bucket.CreateBucketIfNotExists(uint32ToBytes(account))
 	if err != nil {
-		return errors.E(errors.IO, err)
+		return err
 	}
 	// In account bucket, write a null value keyed by the address hash
 	err = bucket.Put(addrHash, nullVal)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := fmt.Sprintf("failed to store address account index key %s", addrHash)
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 	return nil
 }
@@ -803,7 +815,8 @@ func putAccountRow(ns walletdb.ReadWriteBucket, account uint32, row *dbAccountRo
 	// Write the serialized value keyed by the account number.
 	err := bucket.Put(uint32ToBytes(account), serializeAccountRow(row))
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := fmt.Sprintf("failed to store account %d", account)
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 	return nil
 }
@@ -822,12 +835,13 @@ func putAccountInfo(ns walletdb.ReadWriteBucket, account uint32, row *dbBIP0044A
 }
 
 // putLastAccount stores the provided metadata - last account - to the database.
-func putLastAccount(ns walletdb.ReadWriteBucket, account uint32) error {
+func PutLastAccount(ns walletdb.ReadWriteBucket, account uint32) error {
 	bucket := ns.NestedReadWriteBucket(metaBucketName)
 
 	err := bucket.Put(lastAccountName, uint32ToBytes(account))
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := fmt.Sprintf("failed to update metadata '%s'", lastAccountName)
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 	return nil
 }
@@ -845,7 +859,8 @@ func deserializeAddressRow(serializedAddress []byte) (*dbAddressRow, error) {
 	// Given the above, the length of the entry must be at a minimum
 	// the constant value sizes.
 	if len(serializedAddress) < 18 {
-		return nil, errors.E(errors.IO, errors.Errorf("bad address len %d", len(serializedAddress)))
+		str := "malformed serialized address"
+		return nil, managerError(apperrors.ErrDatabase, str, nil)
 	}
 
 	row := dbAddressRow{}
@@ -887,7 +902,8 @@ func deserializeChainedAddress(row *dbAddressRow) (*dbChainAddressRow, error) {
 	//
 	// 4 bytes branch + 4 bytes address index
 	if len(row.rawData) != 8 {
-		return nil, errors.E(errors.IO, errors.Errorf("bad chained address len %d", len(row.rawData)))
+		str := "malformed serialized chained address"
+		return nil, managerError(apperrors.ErrDatabase, str, nil)
 	}
 
 	retRow := dbChainAddressRow{
@@ -925,7 +941,8 @@ func deserializeImportedAddress(row *dbAddressRow) (*dbImportedAddressRow, error
 	// Given the above, the length of the entry must be at a minimum
 	// the constant value sizes.
 	if len(row.rawData) < 8 {
-		return nil, errors.E(errors.IO, errors.Errorf("bad imported address len %d", len(row.rawData)))
+		str := "malformed serialized imported address"
+		return nil, managerError(apperrors.ErrDatabase, str, nil)
 	}
 
 	retRow := dbImportedAddressRow{
@@ -941,6 +958,11 @@ func deserializeImportedAddress(row *dbAddressRow) (*dbImportedAddressRow, error
 	retRow.encryptedPrivKey = make([]byte, privLen)
 	copy(retRow.encryptedPrivKey, row.rawData[offset:offset+privLen])
 
+	if privLen == 72 {
+		retRow.algType = AcctypeEc
+	} else if privLen == 425 {
+		retRow.algType = AcctypeBliss
+	}
 	return &retRow, nil
 }
 
@@ -976,7 +998,8 @@ func deserializeScriptAddress(row *dbAddressRow) (*dbScriptAddressRow, error) {
 	// Given the above, the length of the entry must be at a minimum
 	// the constant value sizes.
 	if len(row.rawData) < 8 {
-		return nil, errors.E(errors.IO, errors.Errorf("bad script address len %d", len(row.rawData)))
+		str := "malformed serialized script address"
+		return nil, managerError(apperrors.ErrDatabase, str, nil)
 	}
 
 	retRow := dbScriptAddressRow{
@@ -1026,7 +1049,8 @@ func fetchAddressByHash(ns walletdb.ReadBucket, addrHash []byte) (interface{}, e
 
 	serializedRow := bucket.Get(addrHash[:])
 	if serializedRow == nil {
-		return nil, errors.E(errors.NotExist, errors.Errorf("no address with hash %x", addrHash))
+		str := "address not found"
+		return nil, managerError(apperrors.ErrAddressNotFound, str, nil)
 	}
 
 	row, err := deserializeAddressRow(serializedRow)
@@ -1043,7 +1067,8 @@ func fetchAddressByHash(ns walletdb.ReadBucket, addrHash []byte) (interface{}, e
 		return deserializeScriptAddress(row)
 	}
 
-	return nil, errors.E(errors.IO, errors.Errorf("unknown address type %d", row.addrType))
+	str := fmt.Sprintf("unsupported address type '%d'", row.addrType)
+	return nil, managerError(apperrors.ErrDatabase, str, nil)
 }
 
 // fetchAddress loads address information for the provided address id from the
@@ -1053,11 +1078,37 @@ func fetchAddressByHash(ns walletdb.ReadBucket, addrHash []byte) (interface{}, e
 // failure.
 func fetchAddress(ns walletdb.ReadBucket, addressID []byte) (interface{}, error) {
 	addrHash := sha256.Sum256(addressID)
-	addr, err := fetchAddressByHash(ns, addrHash[:])
-	if errors.Is(errors.NotExist, err) {
-		return nil, errors.E(errors.NotExist, errors.Errorf("no address with id %x", addressID))
+	return fetchAddressByHash(ns, addrHash[:])
+}
+
+func fetchBlissAddress(ns walletdb.ReadBucket, account, branch, index uint32) []byte {
+	bucket := ns.NestedReadBucket(blissaddrIdxBucketName)
+	rawData := make([]byte, 12)
+	binary.LittleEndian.PutUint32(rawData[0:4], account)
+	binary.LittleEndian.PutUint32(rawData[4:8], branch)
+	binary.LittleEndian.PutUint32(rawData[8:12], index)
+	addridx := sha256.Sum256(rawData)
+	addrpubkeyHash := bucket.Get(addridx[:])
+	return addrpubkeyHash
+}
+
+func fetchBlissAddresses(ns walletdb.ReadBucket, account, branch, start, count uint32) ([]dcrutil.Address, error) {
+	addresses := make([]dcrutil.Address, 0, count)
+	for i := uint32(start); i < count; i++ {
+		blissaddr := fetchBlissAddress(ns, account, branch, i)
+		blisspubkeyaddrstr := string(blissaddr)
+		pubkeyhash, err := dcrutil.DecodeAddress(blisspubkeyaddrstr)
+		if err != nil {
+			return nil, err
+		}
+		addr, ok := pubkeyhash.(*dcrutil.AddressPubKeyHash)
+
+		if !ok {
+			return nil, fmt.Errorf("wrong rawaddr type error")
+		}
+		addresses = append(addresses, addr)
 	}
-	return addr, err
+	return addresses, nil
 }
 
 // putAddress stores the provided address information to the database.  This
@@ -1071,7 +1122,8 @@ func putAddress(ns walletdb.ReadWriteBucket, addressID []byte, row *dbAddressRow
 	addrHash := sha256.Sum256(addressID)
 	err := bucket.Put(addrHash[:], serializeAddressRow(row))
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := fmt.Sprintf("failed to store address %x", addressID)
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 	// Update address account index
 	return putAddrAccountIndex(ns, row.account, addrHash[:])
@@ -1079,9 +1131,10 @@ func putAddress(ns walletdb.ReadWriteBucket, addressID []byte, row *dbAddressRow
 
 // putChainedAddress stores the provided chained address information to the
 // database.
-func putChainedAddress(ns walletdb.ReadWriteBucket, addressID []byte, account uint32,
+func putChainedAddress(ns walletdb.ReadWriteBucket, addr *dcrutil.AddressPubKeyHash, account uint32,
 	status syncStatus, branch, index uint32) error {
 
+	addressID := addr.Hash160()[:]
 	addrRow := dbAddressRow{
 		addrType:   adtChain,
 		account:    account,
@@ -1089,7 +1142,29 @@ func putChainedAddress(ns walletdb.ReadWriteBucket, addressID []byte, account ui
 		syncStatus: status,
 		rawData:    serializeChainedAddress(branch, index),
 	}
+	accoutinfo, err := fetchAccountInfo(ns, account, DBVersion)
+	if err != nil {
+		return err
+	}
+	if accoutinfo.acctType == AcctypeBliss {
+		putblissaddridx(ns, []byte(addr.EncodeAddress()), account, branch, index)
+	}
 	return putAddress(ns, addressID, &addrRow)
+}
+
+func putblissaddridx(ns walletdb.ReadWriteBucket, addressID []byte, account, branch, index uint32) error {
+	bucket := ns.NestedReadWriteBucket(blissaddrIdxBucketName)
+	rawData := make([]byte, 12)
+	binary.LittleEndian.PutUint32(rawData[0:4], account)
+	binary.LittleEndian.PutUint32(rawData[4:8], branch)
+	binary.LittleEndian.PutUint32(rawData[8:12], index)
+	addridx := sha256.Sum256(rawData)
+	err := bucket.Put(addridx[:], addressID)
+	if err != nil {
+		str := fmt.Sprintf("failed to store bliss address idx")
+		return managerError(apperrors.ErrDatabase, str, err)
+	}
+	return nil
 }
 
 // putImportedAddress stores the provided imported address information to the
@@ -1141,63 +1216,82 @@ func fetchAddrAccount(ns walletdb.ReadBucket, addressID []byte) (uint32, error) 
 	addrHash := sha256.Sum256(addressID)
 	val := bucket.Get(addrHash[:])
 	if val == nil {
-		return 0, errors.E(errors.NotExist, errors.Errorf("no address for id %x", addressID))
+		str := "address not found"
+		return 0, managerError(apperrors.ErrAddressNotFound, str, nil)
 	}
 	return binary.LittleEndian.Uint32(val), nil
 }
 
 // forEachAccountAddress calls the given function with each address of
 // the given account stored in the manager, breaking early on error.
-func forEachAccountAddress(ns walletdb.ReadBucket, account uint32, fn func(rowInterface interface{}) error) error {
+func forEachAccountAddress(ns walletdb.ReadBucket, account uint32, fn func(rowInterface interface{}) error) (uint8, error) {
 	bucket := ns.NestedReadBucket(addrAcctIdxBucketName).
 		NestedReadBucket(uint32ToBytes(account))
 	// if index bucket is missing the account, there hasn't been any address
 	// entries yet
 	if bucket == nil {
-		return nil
+		return 255, nil
 	}
 
-	c := bucket.ReadCursor()
-	for k, v := c.First(); k != nil; k, v = c.Next() {
+	var addrRow interface{}
+	err := bucket.ForEach(func(k, v []byte) error {
 		// Skip buckets.
 		if v == nil {
-			continue
+			return nil
 		}
+		var err error
 		addrRow, err := fetchAddressByHash(ns, k)
 		if err != nil {
-			return errors.E(errors.IO, err)
-		}
-
-		err = fn(addrRow)
-		if err != nil {
+			if merr, ok := err.(apperrors.E); ok {
+				desc := fmt.Sprintf("failed to fetch address hash '%x': %v",
+					k, merr.Description)
+				merr.Description = desc
+				return merr
+			}
 			return err
 		}
+
+		return fn(addrRow)
+	})
+	if err != nil {
+		return 255, maybeConvertDbError(err)
 	}
-	return nil
+
+	switch row := addrRow.(type) {
+	case *dbImportedAddressRow:
+		return row.algType, nil
+	}
+	return 255, nil
 }
 
 // forEachActiveAddress calls the given function with each active address
 // stored in the manager, breaking early on error.
 func forEachActiveAddress(ns walletdb.ReadBucket, fn func(rowInterface interface{}) error) error {
 	bucket := ns.NestedReadBucket(addrBucketName)
-	c := bucket.ReadCursor()
-	for k, v := c.First(); k != nil; k, v = c.Next() {
+
+	err := bucket.ForEach(func(k, v []byte) error {
 		// Skip buckets.
 		if v == nil {
-			continue
+			return nil
 		}
 
 		// Deserialize the address row first to determine the field
 		// values.
 		addrRow, err := fetchAddressByHash(ns, k)
-		if err != nil {
-			return errors.E(errors.IO, err)
+		if merr, ok := err.(apperrors.E); ok {
+			desc := fmt.Sprintf("failed to fetch address hash '%x': %v",
+				k, merr.Description)
+			merr.Description = desc
+			return merr
 		}
-
-		err = fn(addrRow)
 		if err != nil {
 			return err
 		}
+
+		return fn(addrRow)
+	})
+	if err != nil {
+		return maybeConvertDbError(err)
 	}
 	return nil
 }
@@ -1215,30 +1309,28 @@ func deletePrivateKeys(ns walletdb.ReadWriteBucket, dbVersion uint32) error {
 	// Delete the master private key params and the crypto private and
 	// script keys.
 	if err := bucket.Delete(masterPrivKeyName); err != nil {
-		return errors.E(errors.IO, err)
+		str := "failed to delete master private key parameters"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 	if err := bucket.Delete(cryptoPrivKeyName); err != nil {
-		return errors.E(errors.IO, err)
+		str := "failed to delete crypto private key"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 	if err := bucket.Delete(cryptoScriptKeyName); err != nil {
-		return errors.E(errors.IO, err)
+		str := "failed to delete crypto script key"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
-	if err := bucket.Delete(coinTypeLegacyPrivKeyName); err != nil {
-		return errors.E(errors.IO, err)
-	}
-	if err := bucket.Delete(coinTypeSLIP0044PrivKeyName); err != nil {
-		return errors.E(errors.IO, err)
+	if err := bucket.Delete(coinTypePrivKeyName); err != nil {
+		str := "failed to delete cointype private key"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 
-	BIP0044Set := map[string]*dbAccountRow{}
-
-	// Fetch all BIP0044 accounts.
+	// Delete the account extended private key for all accounts.
 	bucket = ns.NestedReadWriteBucket(acctBucketName)
-	c := bucket.ReadCursor()
-	for k, v := c.First(); k != nil; k, v = c.Next() {
+	err := bucket.ForEach(func(k, v []byte) error {
 		// Skip buckets.
 		if v == nil {
-			continue
+			return nil
 		}
 
 		// Deserialize the account row first to determine the type.
@@ -1249,40 +1341,37 @@ func deletePrivateKeys(ns walletdb.ReadWriteBucket, dbVersion uint32) error {
 
 		switch row.acctType {
 		case actBIP0044:
-			BIP0044Set[string(k)] = row
+			arow, err := deserializeBIP0044AccountRow(k, row, dbVersion)
+			if err != nil {
+				return err
+			}
+
+			// Reserialize the account without the private key and
+			// store it.
+			row := bip0044AccountInfo(arow.pubKeyEncrypted, nil,
+				arow.nextExternalIndex, arow.nextInternalIndex,
+				arow.lastUsedExternalIndex, arow.lastUsedInternalIndex,
+				arow.lastReturnedExternalIndex, arow.lastReturnedInternalIndex,
+				arow.name, arow.acctType, dbVersion)
+			err = bucket.Put(k, serializeAccountRow(&row.dbAccountRow))
+			if err != nil {
+				str := "failed to delete account private key"
+				return managerError(apperrors.ErrDatabase, str, err)
+			}
 		}
+
+		return nil
+	})
+	if err != nil {
+		return maybeConvertDbError(err)
 	}
 
-	// Delete the account extended private key for all BIP0044 accounts.
-	for k, row := range BIP0044Set {
-		arow, err := deserializeBIP0044AccountRow([]byte(k), row, dbVersion)
-		if err != nil {
-			return err
-		}
-
-		// Reserialize the account without the private key and
-		// store it.
-		row := bip0044AccountInfo(arow.pubKeyEncrypted, nil,
-			arow.nextExternalIndex, arow.nextInternalIndex,
-			arow.lastUsedExternalIndex, arow.lastUsedInternalIndex,
-			arow.lastReturnedExternalIndex, arow.lastReturnedInternalIndex,
-			arow.name, dbVersion)
-		err = bucket.Put([]byte(k), serializeAccountRow(&row.dbAccountRow))
-		if err != nil {
-			return errors.E(errors.IO, err)
-		}
-	}
-
-	importedAddrSet := map[string]*dbAddressRow{}
-	importedScriptAddrSet := map[string]*dbAddressRow{}
-
-	// Fetch all imported addresses.
+	// Delete the private key for all imported addresses.
 	bucket = ns.NestedReadWriteBucket(addrBucketName)
-	c = bucket.ReadCursor()
-	for k, v := c.First(); k != nil; k, v = c.Next() {
+	err = bucket.ForEach(func(k, v []byte) error {
 		// Skip buckets.
 		if v == nil {
-			continue
+			return nil
 		}
 
 		// Deserialize the address row first to determine the field
@@ -1294,44 +1383,42 @@ func deletePrivateKeys(ns walletdb.ReadWriteBucket, dbVersion uint32) error {
 
 		switch row.addrType {
 		case adtImport:
-			importedAddrSet[string(k)] = row
+			irow, err := deserializeImportedAddress(row)
+			if err != nil {
+				return err
+			}
+
+			// Reserialize the imported address without the private
+			// key and store it.
+			row.rawData = serializeImportedAddress(
+				irow.encryptedPubKey, nil)
+			err = bucket.Put(k, serializeAddressRow(row))
+			if err != nil {
+				str := "failed to delete imported private key"
+				return managerError(apperrors.ErrDatabase, str, err)
+			}
 
 		case adtScript:
-			importedScriptAddrSet[string(k)] = row
-		}
-	}
+			srow, err := deserializeScriptAddress(row)
+			if err != nil {
+				return err
+			}
 
-	// Delete the private key for all imported addresses.
-	for k, row := range importedAddrSet {
-		irow, err := deserializeImportedAddress(row)
-		if err != nil {
-			return err
-		}
-
-		// Reserialize the imported address without the private
-		// key and store it.
-		row.rawData = serializeImportedAddress(
-			irow.encryptedPubKey, nil)
-		err = bucket.Put([]byte(k), serializeAddressRow(row))
-		if err != nil {
-			return errors.E(errors.IO, err)
-		}
-	}
-
-	for k, row := range importedScriptAddrSet {
-		srow, err := deserializeScriptAddress(row)
-		if err != nil {
-			return err
+			// Reserialize the script address without the script
+			// and store it.
+			row.rawData = serializeScriptAddress(srow.encryptedHash,
+				nil)
+			err = bucket.Put(k, serializeAddressRow(row))
+			if err != nil {
+				str := "failed to delete imported script"
+				return managerError(apperrors.ErrDatabase, str, err)
+			}
 		}
 
-		// Reserialize the script address without the script
-		// and store it.
-		row.rawData = serializeScriptAddress(srow.encryptedHash,
-			nil)
-		err = bucket.Put([]byte(k), serializeAddressRow(row))
-		if err != nil {
-			return errors.E(errors.IO, err)
-		}
+		return nil
+	})
+	if err != nil {
+		return maybeConvertDbError(err)
 	}
 
 	return nil
@@ -1363,7 +1450,8 @@ func putNextToUseAddrPoolIdx(ns walletdb.ReadWriteBucket, isInternal bool, accou
 
 	err := bucket.Put(k, v)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := "failed to store next to use idx"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 
 	return nil
@@ -1382,46 +1470,59 @@ func managerExists(ns walletdb.ReadBucket) bool {
 func createManagerNS(ns walletdb.ReadWriteBucket) error {
 	mainBucket, err := ns.CreateBucket(mainBucketName)
 	if err != nil {
-		errors.E(errors.IO, err)
+		str := "failed to create main bucket"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 
 	_, err = ns.CreateBucket(addrBucketName)
 	if err != nil {
-		errors.E(errors.IO, err)
+		str := "failed to create address bucket"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 
 	_, err = ns.CreateBucket(acctBucketName)
 	if err != nil {
-		errors.E(errors.IO, err)
+		str := "failed to create account bucket"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 
 	_, err = ns.CreateBucket(addrAcctIdxBucketName)
 	if err != nil {
-		errors.E(errors.IO, err)
+		str := "failed to create address index bucket"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 
 	// usedAddrBucketName bucket was added after manager version 1 release
 	_, err = ns.CreateBucket(usedAddrBucketName)
 	if err != nil {
-		errors.E(errors.IO, err)
+		str := "failed to create used addresses bucket"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 
 	_, err = ns.CreateBucket(acctNameIdxBucketName)
 	if err != nil {
-		errors.E(errors.IO, err)
+		str := "failed to create an account name index bucket"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 
 	_, err = ns.CreateBucket(acctIDIdxBucketName)
 	if err != nil {
-		errors.E(errors.IO, err)
+		str := "failed to create an account id index bucket"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 
 	_, err = ns.CreateBucket(metaBucketName)
 	if err != nil {
-		errors.E(errors.IO, err)
+		str := "failed to create a meta bucket"
+		return managerError(apperrors.ErrDatabase, str, err)
+	}
+	_, err = ns.CreateBucket(blissaddrIdxBucketName)
+	if err != nil {
+		str := "failed to create bliss address index bucket"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 
-	if err := putLastAccount(ns, DefaultAccountNum); err != nil {
+	if err := PutLastAccount(ns, DefaultAccountNum); err != nil {
 		return err
 	}
 
@@ -1434,7 +1535,8 @@ func createManagerNS(ns walletdb.ReadWriteBucket) error {
 	binary.LittleEndian.PutUint64(dateBytes[:], createDate)
 	err = mainBucket.Put(mgrCreateDateName, dateBytes[:])
 	if err != nil {
-		errors.E(errors.IO, err)
+		str := "failed to store database creation time"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 
 	return nil
@@ -1449,7 +1551,7 @@ func upgradeToVersion5(ns walletdb.ReadWriteBucket) error {
 	bucket := ns.NestedReadWriteBucket(mainBucketName)
 	err := bucket.Delete(lastDefaultAddsrName)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		return err
 	}
 
 	return putManagerVersion(ns, 5)
@@ -1462,7 +1564,7 @@ func upgradeToVersion6(ns walletdb.ReadWriteBucket) error {
 	syncBucketName := []byte("sync")
 	err := ns.DeleteNestedBucket(syncBucketName)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		return err
 	}
 	return putManagerVersion(ns, 6)
 }
@@ -1472,7 +1574,8 @@ func upgradeToVersion6(ns walletdb.ReadWriteBucket) error {
 func upgradeManager(ns walletdb.ReadWriteBucket) error {
 	version, err := fetchManagerVersion(ns)
 	if err != nil {
-		return err
+		str := "failed to fetch version for update"
+		return managerError(apperrors.ErrDatabase, str, err)
 	}
 
 	// Below is some example code on how to properly perform DB
@@ -1525,8 +1628,28 @@ func upgradeManager(ns walletdb.ReadWriteBucket) error {
 	// version or the there is a newer version that this code does not
 	// understand.
 	if version != latestMgrVersion {
-		return errors.E(errors.Invalid, errors.Errorf("incompatible address manager version %d", version))
+		str := fmt.Sprintf("the latest address manager db version %d does "+
+			"not equal the expected version %d", version, latestMgrVersion)
+		return managerError(apperrors.ErrUpgrade, str, nil)
 	}
 
+	return nil
+}
+
+func PutChainedBlissAddress(ns walletdb.ReadWriteBucket, addr *dcrutil.AddressPubKeyHash, account uint32,
+	status syncStatus, branch, index uint32) error {
+	return putChainedAddress(ns, addr, account, status, branch, index)
+}
+
+func CreateBlissBucket(ns walletdb.ReadWriteBucket) error {
+	//_, err := ns.CreateBucketIfNotExists(blissaddrIdxBucketName)
+	bucket := ns.NestedReadBucket(blissaddrIdxBucketName)
+	if bucket == nil {
+		_, err := ns.CreateBucket(blissaddrIdxBucketName)
+		if err != nil {
+			str := "failed to create bliss address index bucket"
+			return managerError(apperrors.ErrDatabase, str, err)
+		}
+	}
 	return nil
 }

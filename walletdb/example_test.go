@@ -1,5 +1,5 @@
 // Copyright (c) 2014 The btcsuite developers
-// Copyright (c) 2015 The coolsnady developers
+// Copyright (c) 2015 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -14,8 +14,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
-	_ "github.com/coolsnady/hxwallet/wallet/internal/walletdb/bdb"
+	"github.com/coolsnady/hxwallet/walletdb"
+	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
 )
 
 // This example demonstrates creating a new database.
@@ -147,7 +147,7 @@ func Example_basicUsage() {
 
 		// Read the key back and ensure it matches.
 		if !bytes.Equal(rootBucket.Get(key), value) {
-			return errors.Errorf("unexpected value for key '%s'", key)
+			return fmt.Errorf("unexpected value for key '%s'", key)
 		}
 
 		// Create a new nested bucket under the root bucket.
@@ -160,7 +160,7 @@ func Example_basicUsage() {
 		// The key from above that was set in the root bucket does not
 		// exist in this new nested bucket.
 		if nestedBucket.Get(key) != nil {
-			return errors.Errorf("key '%s' is not expected nil", key)
+			return fmt.Errorf("key '%s' is not expected nil", key)
 		}
 
 		return nil

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 The coolsnady developers
+// Copyright (c) 2016-2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -7,17 +7,18 @@ package wallet
 import (
 	"encoding/hex"
 	"time"
+	"errors"
 
+	"github.com/hybridnetwork/bitset"
 	"github.com/coolsnady/hxd/blockchain/stake"
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/dcrutil"
-	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
 	"github.com/coolsnady/hxd/txscript"
 	"github.com/coolsnady/hxd/wire"
-	"github.com/coolsnady/hxwallet/errors"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
+    dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
+	"github.com/coolsnady/hxwallet/apperrors"
 	"github.com/coolsnady/hxwallet/wallet/udb"
-	"github.com/jrick/bitset"
+	"github.com/coolsnady/hxwallet/walletdb"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -25,8 +26,6 @@ import (
 // using the provided votebits.  The ticket purchase transaction must be stored
 // by the wallet.
 func (w *Wallet) GenerateVoteTx(blockHash *chainhash.Hash, height int32, ticketHash *chainhash.Hash, voteBits stake.VoteBits) (*wire.MsgTx, error) {
-	const op errors.Op = "wallet.GenerateVoteTx"
-
 	var vote *wire.MsgTx
 	err := walletdb.View(w.db, func(dbtx walletdb.ReadTx) error {
 		addrmgrNs := dbtx.ReadBucket(waddrmgrNamespaceKey)
@@ -36,30 +35,22 @@ func (w *Wallet) GenerateVoteTx(blockHash *chainhash.Hash, height int32, ticketH
 			return err
 		}
 		if ticketPurchase == nil {
-			return errors.E(op, errors.NotExist, errors.Errorf("missing ticket %v", ticketHash))
+			const str = "ticket purchase transaction not found"
+			return apperrors.New(apperrors.ErrSStxNotFound, str)
 		}
 		vote, err = createUnsignedVote(ticketHash, ticketPurchase,
 			height, blockHash, voteBits, w.subsidyCache, w.chainParams)
 		if err != nil {
-			return errors.E(op, err)
+			return err
 		}
-		err = w.signVote(addrmgrNs, ticketPurchase, vote)
-		if err != nil {
-			return errors.E(op, err)
-		}
-		return err
+		return w.signVote(addrmgrNs, ticketPurchase, vote)
 	})
-	if err != nil {
-		return nil, errors.E(op, err)
-	}
-	return vote, nil
+	return vote, err
 }
 
 // LiveTicketHashes returns the hashes of live tickets that the wallet has
 // purchased or has voting authority for.
 func (w *Wallet) LiveTicketHashes(chainClient *dcrrpcclient.Client, includeImmature bool) ([]chainhash.Hash, error) {
-	const op errors.Op = "wallet.LiveTicketHashes"
-
 	var ticketHashes []chainhash.Hash
 	var maybeLive []*chainhash.Hash
 
@@ -114,13 +105,13 @@ func (w *Wallet) LiveTicketHashes(chainClient *dcrrpcclient.Client, includeImmat
 		return it.Err()
 	})
 	if err != nil {
-		return nil, errors.E(op, err)
+		return nil, err
 	}
 
 	// Determine if the extra tickets are immature or possibly live.  Because
-	// these transactions are not part of the wallet's transaction history, hxd
+	// these transactions are not part of the wallet's transaction history, dcrd
 	// must be queried for their blockchain height.  This functionality requires
-	// the hxd transaction index to be enabled.
+	// the dcrd transaction index to be enabled.
 	var g errgroup.Group
 	type extraTicketResult struct {
 		valid  bool // unspent with known height
@@ -175,11 +166,11 @@ func (w *Wallet) LiveTicketHashes(chainClient *dcrrpcclient.Client, includeImmat
 	// Use RPC to query which of the possibly-live tickets are really live.
 	liveBitsetHex, err := chainClient.ExistsLiveTickets(maybeLive)
 	if err != nil {
-		return nil, errors.E(op, err)
+		return nil, err
 	}
 	liveBitset, err := hex.DecodeString(liveBitsetHex)
 	if err != nil {
-		return nil, errors.E(op, errors.Encoding, err)
+		return nil, err
 	}
 	for i, h := range maybeLive {
 		if bitset.Bytes(liveBitset).Get(i) {
@@ -194,8 +185,6 @@ func (w *Wallet) LiveTicketHashes(chainClient *dcrrpcclient.Client, includeImmat
 // rights delegated to votingAddr.  This function does not return the hashes of
 // pruned tickets.
 func (w *Wallet) TicketHashesForVotingAddress(votingAddr dcrutil.Address) ([]chainhash.Hash, error) {
-	const op errors.Op = "wallet.TicketHashesForVotingAddress"
-
 	var ticketHashes []chainhash.Hash
 	err := walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 		stakemgrNs := tx.ReadBucket(wstakemgrNamespaceKey)
@@ -225,25 +214,37 @@ func (w *Wallet) TicketHashesForVotingAddress(votingAddr dcrutil.Address) ([]cha
 
 		return nil
 	})
+	return ticketHashes, err
+}
+
+// updateStakePoolInvalidTicket properly updates a previously marked Invalid pool ticket,
+// it then creates a new entry in the validly tracked pool ticket db.
+func (w *Wallet) updateStakePoolInvalidTicket(stakemgrNs walletdb.ReadWriteBucket,
+	addr dcrutil.Address, ticket *chainhash.Hash, ticketHeight int64) error {
+
+	err := w.StakeMgr.RemoveStakePoolUserInvalTickets(stakemgrNs, addr, ticket)
 	if err != nil {
-		return nil, errors.E(op, err)
+		return err
 	}
-	return ticketHashes, nil
+	poolTicket := &udb.PoolTicket{
+		Ticket:       *ticket,
+		HeightTicket: uint32(ticketHeight),
+		Status:       udb.TSImmatureOrLive,
+	}
+
+	return w.StakeMgr.UpdateStakePoolUserTickets(stakemgrNs, addr, poolTicket)
 }
 
 // AddTicket adds a ticket transaction to the stake manager.  It is not added to
 // the transaction manager because it is unknown where the transaction belongs
 // on the blockchain.  It will be used to create votes.
 func (w *Wallet) AddTicket(ticket *wire.MsgTx) error {
-	const op errors.Op = "wallet.AddTicket"
-
 	err := stake.CheckSStx(ticket)
 	if err != nil {
 		txHash := ticket.TxHash()
-		return errors.E(op, errors.Invalid, errors.Errorf("%v is not a ticket", &txHash))
+		return errors.New( "wallet.AddTicket"+txHash.String())
 	}
-
-	err = walletdb.Update(w.db, func(tx walletdb.ReadWriteTx) error {
+	return walletdb.Update(w.db, func(tx walletdb.ReadWriteTx) error {
 		stakemgrNs := tx.ReadWriteBucket(wstakemgrNamespaceKey)
 
 		// Insert the ticket to be tracked and voted.
@@ -264,17 +265,19 @@ func (w *Wallet) AddTicket(ticket *wire.MsgTx) error {
 
 			ticketHash := ticket.TxHash()
 
-			// Update the pool ticket stake. This will include removing it from the
-			// invalid slice and adding a ImmatureOrLive ticket to the valid ones.
-			err = w.StakeMgr.RemoveStakePoolUserInvalTickets(stakemgrNs, addrs[0], &ticketHash)
+			chainClient, err := w.requireChainClient()
 			if err != nil {
 				return err
 			}
-			poolTicket := &udb.PoolTicket{
-				Ticket: ticketHash,
-				Status: udb.TSImmatureOrLive,
+			rawTx, err := chainClient.GetRawTransactionVerbose(&ticketHash)
+			if err != nil {
+				return err
 			}
-			err = w.StakeMgr.UpdateStakePoolUserTickets(stakemgrNs, addrs[0], poolTicket)
+
+			// Update the pool ticket stake. This will include removing it from the
+			// invalid slice and adding a ImmatureOrLive ticket to the valid ones.
+			err = w.updateStakePoolInvalidTicket(stakemgrNs, addrs[0], &ticketHash,
+				rawTx.BlockHeight)
 			if err != nil {
 				return err
 			}
@@ -282,28 +285,24 @@ func (w *Wallet) AddTicket(ticket *wire.MsgTx) error {
 
 		return nil
 	})
-	if err != nil {
-		return errors.E(op, err)
-	}
-	return nil
 }
 
 // RevokeTickets creates and sends revocation transactions for any unrevoked
 // missed and expired tickets.  The wallet must be unlocked to generate any
 // revocations.
 func (w *Wallet) RevokeTickets(chainClient *dcrrpcclient.Client) error {
-	const op errors.Op = "wallet.RevokeTickets"
-
 	var ticketHashes []chainhash.Hash
+	var tipHash chainhash.Hash
+	var tipHeight int32
 	err := walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 		ns := tx.ReadBucket(wtxmgrNamespaceKey)
 		var err error
-		_, tipHeight := w.TxStore.MainChainTip(ns)
+		tipHash, tipHeight = w.TxStore.MainChainTip(ns)
 		ticketHashes, err = w.TxStore.UnspentTickets(tx, tipHeight, false)
 		return err
 	})
 	if err != nil {
-		return errors.E(op, err)
+		return err
 	}
 
 	ticketHashPtrs := make([]*chainhash.Hash, len(ticketHashes))
@@ -314,19 +313,19 @@ func (w *Wallet) RevokeTickets(chainClient *dcrrpcclient.Client) error {
 	missedFuture := chainClient.ExistsMissedTicketsAsync(ticketHashPtrs)
 	expiredBitsHex, err := expiredFuture.Receive()
 	if err != nil {
-		return errors.E(op, err)
+		return err
 	}
 	missedBitsHex, err := missedFuture.Receive()
 	if err != nil {
-		return errors.E(op, err)
+		return err
 	}
 	expiredBits, err := hex.DecodeString(expiredBitsHex)
 	if err != nil {
-		return errors.E(op, err)
+		return err
 	}
 	missedBits, err := hex.DecodeString(missedBitsHex)
 	if err != nil {
-		return errors.E(op, err)
+		return err
 	}
 	revokableTickets := make([]*chainhash.Hash, 0, len(ticketHashes))
 	for i, p := range ticketHashPtrs {
@@ -369,26 +368,31 @@ func (w *Wallet) RevokeTickets(chainClient *dcrrpcclient.Client) error {
 		return nil
 	})
 	if err != nil {
-		return errors.E(op, err)
+		return err
 	}
 
 	for i, revocation := range revocations {
 		rec, err := udb.NewTxRecordFromMsgTx(revocation, time.Now())
 		if err != nil {
-			return errors.E(op, err)
+			return err
 		}
 		err = walletdb.Update(w.db, func(dbtx walletdb.ReadWriteTx) error {
+			err = w.StakeMgr.StoreRevocationInfo(dbtx, revokableTickets[i],
+				&rec.Hash, &tipHash, tipHeight)
+			if err != nil {
+				return err
+			}
 			// Could be more efficient by avoiding processTransaction, as we
 			// know it is a revocation.
-			err = w.processTransaction(dbtx, rec, nil, nil)
+			err = w.processTransactionRecord(dbtx, rec, nil, nil)
 			if err != nil {
-				return errors.E(op, err)
+				return err
 			}
 			_, err = chainClient.SendRawTransaction(revocation, true)
 			return err
 		})
 		if err != nil {
-			return errors.E(op, err)
+			return err
 		}
 		log.Infof("Revoked ticket %v with revocation %v", revokableTickets[i],
 			&rec.Hash)

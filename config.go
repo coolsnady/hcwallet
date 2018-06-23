@@ -1,12 +1,11 @@
 // Copyright (c) 2013-2016 The btcsuite developers
-// Copyright (c) 2015-2018 The coolsnady developers
+// Copyright (c) 2015-2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 package main
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"os"
@@ -16,15 +15,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/coolsnady/hxd/dcrutil"
-	"github.com/coolsnady/hxwallet/errors"
+	"github.com/decred/slog"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxwallet/internal/cfgutil"
 	"github.com/coolsnady/hxwallet/netparams"
 	"github.com/coolsnady/hxwallet/ticketbuyer"
-	"github.com/coolsnady/hxwallet/version"
 	"github.com/coolsnady/hxwallet/wallet"
 	"github.com/coolsnady/hxwallet/wallet/txrules"
-	"github.com/decred/slog"
 	flags "github.com/jessevdk/go-flags"
 )
 
@@ -46,7 +43,7 @@ const (
 	defaultPromptPass          = false
 	defaultPass                = ""
 	defaultPromptPublicPass    = false
-	defaultGapLimit            = wallet.DefaultGapLimit
+	defaultAddrIdxScanLen      = wallet.DefaultGapLimit
 	defaultStakePoolColdExtKey = ""
 	defaultAllowHighFees       = false
 
@@ -108,20 +105,21 @@ type config struct {
 	EnableVoting        bool                 `long:"enablevoting" description:"Enable creation of votes and revocations for owned tickets"`
 	ReuseAddresses      bool                 `long:"reuseaddresses" description:"Reuse addresses for ticket purchase to cut down on address overuse"`
 	PurchaseAccount     string               `long:"purchaseaccount" description:"Name of the account to buy tickets from"`
+	TicketAddress       *cfgutil.AddressFlag `long:"ticketaddress" description:"Send all ticket outputs to this address (P2PKH or P2SH only)"`
 	PoolAddress         *cfgutil.AddressFlag `long:"pooladdress" description:"The ticket pool address where ticket fees will go to"`
 	PoolFees            float64              `long:"poolfees" description:"The per-ticket fee mandated by the ticket pool as a percent (e.g. 1.00 for 1.00% fee)"`
-	GapLimit            int                  `long:"gaplimit" description:"The size of gaps between used addresses.  Used for address scanning and when generating addresses with the wrap option."`
+	AddrIdxScanLen      int                  `long:"addridxscanlen" description:"The width of the scan for last used addresses on wallet restore and start up"`
 	StakePoolColdExtKey string               `long:"stakepoolcoldextkey" description:"Enables the wallet as a stake pool with an extended key in the format of \"xpub...:index\" to derive cold wallet addresses to send fees to"`
 	AllowHighFees       bool                 `long:"allowhighfees" description:"Force the RPC client to use the 'allowHighFees' flag when sending transactions"`
 	RelayFee            *cfgutil.AmountFlag  `long:"txfee" description:"Sets the wallet's tx fee per kb"`
 	TicketFee           *cfgutil.AmountFlag  `long:"ticketfee" description:"Sets the wallet's ticket fee per kb"`
 
 	// RPC client options
-	RPCConnect       string                  `short:"c" long:"rpcconnect" description:"Hostname/IP and port of hxd RPC server to connect to"`
-	CAFile           *cfgutil.ExplicitString `long:"cafile" description:"File containing root certificates to authenticate a TLS connections with hxd"`
+	RPCConnect       string                  `short:"c" long:"rpcconnect" description:"Hostname/IP and port of dcrd RPC server to connect to"`
+	CAFile           *cfgutil.ExplicitString `long:"cafile" description:"File containing root certificates to authenticate a TLS connections with dcrd"`
 	DisableClientTLS bool                    `long:"noclienttls" description:"Disable TLS for the RPC client -- NOTE: This is only allowed if the RPC client is connecting to localhost"`
-	DcrdUsername     string                  `long:"dcrdusername" description:"Username for hxd authentication"`
-	DcrdPassword     string                  `long:"dcrdpassword" default-mask:"-" description:"Password for hxd authentication"`
+	DcrdUsername     string                  `long:"dcrdusername" description:"Username for dcrd authentication"`
+	DcrdPassword     string                  `long:"dcrdpassword" default-mask:"-" description:"Password for dcrd authentication"`
 	Proxy            string                  `long:"proxy" description:"Connect via SOCKS5 proxy (eg. 127.0.0.1:9050)"`
 	ProxyUser        string                  `long:"proxyuser" description:"Username for proxy server"`
 	ProxyPass        string                  `long:"proxypass" default-mask:"-" description:"Password for proxy server"`
@@ -145,8 +143,8 @@ type config struct {
 	NoLegacyRPC            bool                    `long:"nolegacyrpc" description:"Disable the legacy JSON-RPC server"`
 	LegacyRPCMaxClients    int64                   `long:"rpcmaxclients" description:"Max number of legacy JSON-RPC clients for standard connections"`
 	LegacyRPCMaxWebsockets int64                   `long:"rpcmaxwebsockets" description:"Max number of legacy JSON-RPC websocket connections"`
-	Username               string                  `short:"u" long:"username" description:"Username for legacy JSON-RPC and hxd authentication (if dcrdusername is unset)"`
-	Password               string                  `short:"P" long:"password" default-mask:"-" description:"Password for legacy JSON-RPC and hxd authentication (if dcrdpassword is unset)"`
+	Username               string                  `short:"u" long:"username" description:"Username for legacy JSON-RPC and dcrd authentication (if dcrdusername is unset)"`
+	Password               string                  `short:"P" long:"password" default-mask:"-" description:"Password for legacy JSON-RPC and dcrd authentication (if dcrdpassword is unset)"`
 
 	// IPC options
 	PipeTx            *uint `long:"pipetx" description:"File descriptor or handle of write end pipe to enable child -> parent process communication"`
@@ -157,30 +155,30 @@ type config struct {
 	tbCfg  ticketbuyer.Config
 
 	// Deprecated options
-	DataDir        *cfgutil.ExplicitString `short:"b" long:"datadir" default-mask:"-" description:"DEPRECATED -- use appdata instead"`
-	PruneTickets   bool                    `long:"prunetickets" description:"DEPRECATED -- old tickets are always pruned"`
-	TicketAddress  *cfgutil.AddressFlag    `long:"ticketaddress" description:"DEPRECATED -- use ticketbuyer.votingaddress instead"`
-	AddrIdxScanLen int                     `long:"addridxscanlen" description:"DEPRECATED -- use gaplimit instead"`
+	DataDir      *cfgutil.ExplicitString `short:"b" long:"datadir" default-mask:"-" description:"DEPRECATED -- use appdata instead"`
+	PruneTickets bool                    `long:"prunetickets" description:"DEPRECATED -- old tickets are always pruned"`
+
+	// Added to assist postquantum functionality
+	createPass string
 }
 
 type ticketBuyerOptions struct {
-	AvgPriceMode              string               `long:"avgpricemode" description:"The mode to use for calculating the average price if pricetarget is disabled (vwap, pool, dual)"`
-	AvgPriceVWAPDelta         int                  `long:"avgpricevwapdelta" description:"The number of blocks to use from the current block to calculate the VWAP"`
-	MaxFee                    *cfgutil.AmountFlag  `long:"maxfee" description:"Maximum ticket fee per KB"`
-	MinFee                    *cfgutil.AmountFlag  `long:"minfee" description:"Minimum ticket fee per KB"`
-	FeeSource                 string               `long:"feesource" description:"The fee source to use for ticket fee per KB (median or mean)"`
-	MaxPerBlock               int                  `long:"maxperblock" description:"Maximum tickets per block, with negative numbers indicating buy one ticket every 1-in-n blocks"`
-	BlocksToAvg               int                  `long:"blockstoavg" description:"Number of blocks to average for fees calculation"`
-	FeeTargetScaling          float64              `long:"feetargetscaling" description:"Scaling factor for setting the ticket fee, multiplies by the average fee"`
-	MaxInMempool              int                  `long:"maxinmempool" description:"The maximum number of your tickets allowed in mempool before purchasing more tickets"`
-	ExpiryDelta               int                  `long:"expirydelta" description:"Number of blocks in the future before the ticket expires"`
-	MaxPriceAbsolute          *cfgutil.AmountFlag  `long:"maxpriceabsolute" description:"Maximum absolute price to purchase a ticket"`
-	MaxPriceRelative          float64              `long:"maxpricerelative" description:"Scaling factor for setting the maximum price, multiplies by the average price"`
-	BalanceToMaintainAbsolute *cfgutil.AmountFlag  `long:"balancetomaintainabsolute" description:"Amount of funds to keep in wallet when stake mining"`
-	BalanceToMaintainRelative float64              `long:"balancetomaintainrelative" description:"Proportion of funds to leave in wallet when stake mining"`
-	NoSpreadTicketPurchases   bool                 `long:"nospreadticketpurchases" description:"Do not spread ticket purchases evenly throughout the window"`
-	DontWaitForTickets        bool                 `long:"dontwaitfortickets" description:"Don't wait until your last round of tickets have entered the blockchain to attempt to purchase more"`
-	VotingAddress             *cfgutil.AddressFlag `long:"votingaddress" description:"Purchase tickets with voting rights assigned to this address"`
+	AvgPriceMode              string              `long:"avgpricemode" description:"The mode to use for calculating the average price if pricetarget is disabled (vwap, pool, dual)"`
+	AvgPriceVWAPDelta         int                 `long:"avgpricevwapdelta" description:"The number of blocks to use from the current block to calculate the VWAP"`
+	MaxFee                    *cfgutil.AmountFlag `long:"maxfee" description:"Maximum ticket fee per KB"`
+	MinFee                    *cfgutil.AmountFlag `long:"minfee" description:"Minimum ticket fee per KB"`
+	FeeSource                 string              `long:"feesource" description:"The fee source to use for ticket fee per KB (median or mean)"`
+	MaxPerBlock               int                 `long:"maxperblock" description:"Maximum tickets per block, with negative numbers indicating buy one ticket every 1-in-n blocks"`
+	BlocksToAvg               int                 `long:"blockstoavg" description:"Number of blocks to average for fees calculation"`
+	FeeTargetScaling          float64             `long:"feetargetscaling" description:"Scaling factor for setting the ticket fee, multiplies by the average fee"`
+	MaxInMempool              int                 `long:"maxinmempool" description:"The maximum number of your tickets allowed in mempool before purchasing more tickets"`
+	ExpiryDelta               int                 `long:"expirydelta" description:"Number of blocks in the future before the ticket expires"`
+	MaxPriceAbsolute          *cfgutil.AmountFlag `long:"maxpriceabsolute" description:"Maximum absolute price to purchase a ticket"`
+	MaxPriceRelative          float64             `long:"maxpricerelative" description:"Scaling factor for setting the maximum price, multiplies by the average price"`
+	BalanceToMaintainAbsolute *cfgutil.AmountFlag `long:"balancetomaintainabsolute" description:"Amount of funds to keep in wallet when stake mining"`
+	BalanceToMaintainRelative float64             `long:"balancetomaintainrelative" description:"Proportion of funds to leave in wallet when stake mining"`
+	NoSpreadTicketPurchases   bool                `long:"nospreadticketpurchases" description:"Do not spread ticket purchases evenly throughout the window"`
+	DontWaitForTickets        bool                `long:"dontwaitfortickets" description:"Don't wait until your last round of tickets have entered the blockchain to attempt to purchase more"`
 
 	// Deprecated options
 	MaxPriceScale         float64             `long:"maxpricescale" description:"DEPRECATED -- Attempt to prevent the stake difficulty from going above this multiplier (>1.0) by manipulation, 0 to disable"`
@@ -191,11 +189,6 @@ type ticketBuyerOptions struct {
 // cleanAndExpandPath expands environement variables and leading ~ in the
 // passed path, cleans the result, and returns it.
 func cleanAndExpandPath(path string) string {
-	// Do not try to clean the empty string
-	if path == "" {
-		return ""
-	}
-
 	// NOTE: The os.ExpandEnv doesn't work with Windows cmd.exe-style
 	// %VARIABLE%, but they variables can still be expanded via POSIX-style
 	// $VARIABLE.
@@ -272,7 +265,7 @@ func parseAndSetDebugLevels(debugLevel string) error {
 		// Validate debug log level.
 		if !validLogLevel(debugLevel) {
 			str := "The specified debug level [%v] is invalid"
-			return errors.Errorf(str, debugLevel)
+			return fmt.Errorf(str, debugLevel)
 		}
 
 		// Change the logging level for all subsystems.
@@ -287,7 +280,7 @@ func parseAndSetDebugLevels(debugLevel string) error {
 		if !strings.Contains(logLevelPair, "=") {
 			str := "The specified debug level contains an invalid " +
 				"subsystem/level pair [%v]"
-			return errors.Errorf(str, logLevelPair)
+			return fmt.Errorf(str, logLevelPair)
 		}
 
 		// Extract the specified subsystem and log level.
@@ -298,13 +291,13 @@ func parseAndSetDebugLevels(debugLevel string) error {
 		if _, exists := subsystemLoggers[subsysID]; !exists {
 			str := "The specified subsystem [%v] is invalid -- " +
 				"supported subsytems %v"
-			return errors.Errorf(str, subsysID, supportedSubsystems())
+			return fmt.Errorf(str, subsysID, supportedSubsystems())
 		}
 
 		// Validate log level.
 		if !validLogLevel(logLevel) {
 			str := "The specified debug level [%v] is invalid"
-			return errors.Errorf(str, logLevel)
+			return fmt.Errorf(str, logLevel)
 		}
 
 		setLogLevel(subsysID, logLevel)
@@ -322,13 +315,13 @@ func parseAndSetDebugLevels(debugLevel string) error {
 //      3) Load configuration file overwriting defaults with any specified options
 //      4) Parse CLI options and overwrite/add any specified options
 //
-// The above results in hxwallet functioning properly without any config
+// The above results in dcrwallet functioning properly without any config
 // settings while still allowing the user to override settings with config files
 // and command line options.  Command line options always take precedence.
 // The bool returned indicates whether or not the wallet was recreated from a
 // seed and needs to perform the initial resync. The []byte is the private
 // passphrase required to do the sync for this special case.
-func loadConfig(ctx context.Context) (*config, []string, error) {
+func loadConfig() (*config, []string, error) {
 	loadConfigError := func(err error) (*config, []string, error) {
 		return nil, nil, err
 	}
@@ -356,17 +349,18 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 		PruneTickets:           defaultPruneTickets,
 		PurchaseAccount:        defaultPurchaseAccount,
 		AutomaticRepair:        defaultAutomaticRepair,
-		GapLimit:               defaultGapLimit,
+		AddrIdxScanLen:         defaultAddrIdxScanLen,
 		StakePoolColdExtKey:    defaultStakePoolColdExtKey,
 		AllowHighFees:          defaultAllowHighFees,
 		RelayFee:               cfgutil.NewAmountFlag(txrules.DefaultRelayFeePerKb),
 		TicketFee:              cfgutil.NewAmountFlag(txrules.DefaultRelayFeePerKb),
+		TicketAddress:          cfgutil.NewAddressFlag(nil),
 		PoolAddress:            cfgutil.NewAddressFlag(nil),
 
+		createPass: "",
+
 		// TODO: DEPRECATED - remove.
-		DataDir:        cfgutil.NewExplicitString(defaultAppDataDir),
-		TicketAddress:  cfgutil.NewAddressFlag(nil),
-		AddrIdxScanLen: defaultGapLimit,
+		DataDir: cfgutil.NewExplicitString(defaultAppDataDir),
 
 		// Ticket Buyer Options
 		TBOpts: ticketBuyerOptions{
@@ -386,7 +380,6 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 			PriceTarget:               cfgutil.NewAmountFlag(defaultPriceTarget),
 			BalanceToMaintainAbsolute: cfgutil.NewAmountFlag(defaultBalanceToMaintainAbsolute),
 			BalanceToMaintainRelative: defaultBalanceToMaintainRelative,
-			VotingAddress:             cfgutil.NewAddressFlag(nil),
 		},
 	}
 
@@ -404,13 +397,19 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 		return loadConfigError(err)
 	}
 
+	// Add an argument to create a password for bliss functionality
+	if len(os.Args) > 2 && strings.HasPrefix(os.Args[2], "--pass=") {
+		pass := os.Args[2][7:]
+		cfg.createPass = pass
+	}
+
 	// Show the version and exit if the version flag was specified.
 	funcName := "loadConfig"
 	appName := filepath.Base(os.Args[0])
 	appName = strings.TrimSuffix(appName, filepath.Ext(appName))
 	usageMessage := fmt.Sprintf("Use %s -h to show usage", appName)
 	if preCfg.ShowVersion {
-		fmt.Printf("%s version %s (Go version %s)\n", appName, version.String(), runtime.Version())
+		fmt.Printf("%s version %s (Go version %s)\n", appName, version(), runtime.Version())
 		os.Exit(0)
 	}
 
@@ -478,7 +477,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 	if numNets > 1 {
 		str := "%s: The testnet and simnet params can't be used " +
 			"together -- choose one"
-		err := errors.Errorf(str, "loadConfig")
+		err := fmt.Errorf(str, "loadConfig")
 		fmt.Fprintln(os.Stderr, err)
 		return loadConfigError(err)
 	}
@@ -500,7 +499,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 
 	// Parse, validate, and set debug log level(s).
 	if err := parseAndSetDebugLevels(cfg.DebugLevel); err != nil {
-		err := errors.Errorf("%s: %v", "loadConfig", err.Error())
+		err := fmt.Errorf("%s: %v", "loadConfig", err.Error())
 		fmt.Fprintln(os.Stderr, err)
 		parser.WriteHelp(os.Stderr)
 		return loadConfigError(err)
@@ -548,7 +547,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 	case ticketbuyer.TicketFeeMedian:
 	default:
 		str := "%s: Invalid fee source '%s'"
-		err := errors.Errorf(str, funcName, cfg.TBOpts.FeeSource)
+		err := fmt.Errorf(str, funcName, cfg.TBOpts.FeeSource)
 		fmt.Fprintln(os.Stderr, err)
 		return loadConfigError(err)
 	}
@@ -560,7 +559,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 	case ticketbuyer.PriceTargetDual:
 	default:
 		str := "%s: Invalid average price mode '%s'"
-		err := errors.Errorf(str, funcName, cfg.TBOpts.AvgPriceMode)
+		err := fmt.Errorf(str, funcName, cfg.TBOpts.AvgPriceMode)
 		fmt.Fprintln(os.Stderr, err)
 		return loadConfigError(err)
 	}
@@ -568,7 +567,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 	// Sanity check MaxPriceRelative
 	if cfg.TBOpts.MaxPriceRelative < 0 {
 		str := "%s: maxpricerelative cannot be negative: %v"
-		err := errors.Errorf(str, funcName, cfg.TBOpts.MaxPriceRelative)
+		err := fmt.Errorf(str, funcName, cfg.TBOpts.MaxPriceRelative)
 		fmt.Fprintln(os.Stderr, err)
 		return loadConfigError(err)
 	}
@@ -576,19 +575,19 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 	// Sanity check MinFee and MaxFee
 	if cfg.TBOpts.MinFee.ToCoin() > cfg.TBOpts.MaxFee.ToCoin() {
 		str := "%s: minfee cannot be higher than maxfee: (min %v, max %v)"
-		err := errors.Errorf(str, funcName, cfg.TBOpts.MinFee, cfg.TBOpts.MaxFee)
+		err := fmt.Errorf(str, funcName, cfg.TBOpts.MinFee, cfg.TBOpts.MaxFee)
 		fmt.Fprintln(os.Stderr, err)
 		return loadConfigError(err)
 	}
 	if cfg.TBOpts.MaxFee.ToCoin() < 0 {
 		str := "%s: maxfee cannot be less than zero: %v"
-		err := errors.Errorf(str, funcName, cfg.TBOpts.MaxFee)
+		err := fmt.Errorf(str, funcName, cfg.TBOpts.MaxFee)
 		fmt.Fprintln(os.Stderr, err)
 		return loadConfigError(err)
 	}
 	if cfg.TBOpts.MinFee.ToCoin() < 0 {
 		str := "%s: minfee cannot be less than zero: %v"
-		err := errors.Errorf(str, funcName, cfg.TBOpts.MinFee)
+		err := fmt.Errorf(str, funcName, cfg.TBOpts.MinFee)
 		fmt.Fprintln(os.Stderr, err)
 		return loadConfigError(err)
 	}
@@ -596,7 +595,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 	// Sanity check BalanceToMaintainAbsolute
 	if cfg.TBOpts.BalanceToMaintainAbsolute.ToCoin() < 0 {
 		str := "%s: balancetomaintainabsolute cannot be negative: %v"
-		err := errors.Errorf(str, funcName, cfg.TBOpts.BalanceToMaintainAbsolute)
+		err := fmt.Errorf(str, funcName, cfg.TBOpts.BalanceToMaintainAbsolute)
 		fmt.Fprintln(os.Stderr, err)
 		return loadConfigError(err)
 	}
@@ -604,13 +603,13 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 	// Sanity check BalanceToMaintainRelative
 	if cfg.TBOpts.BalanceToMaintainRelative < 0 {
 		str := "%s: balancetomaintainabsolute cannot be negative: %v"
-		err := errors.Errorf(str, funcName, cfg.TBOpts.BalanceToMaintainRelative)
+		err := fmt.Errorf(str, funcName, cfg.TBOpts.BalanceToMaintainRelative)
 		fmt.Fprintln(os.Stderr, err)
 		return loadConfigError(err)
 	}
 	if cfg.TBOpts.BalanceToMaintainRelative > 1 {
 		str := "%s: balancetomaintainrelative cannot be greater then 1: %v"
-		err := errors.Errorf(str, funcName, cfg.TBOpts.BalanceToMaintainRelative)
+		err := fmt.Errorf(str, funcName, cfg.TBOpts.BalanceToMaintainRelative)
 		fmt.Fprintln(os.Stderr, err)
 		return loadConfigError(err)
 	}
@@ -618,7 +617,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 	// Sanity check ExpiryDelta
 	if cfg.TBOpts.ExpiryDelta <= 0 {
 		str := "%s: expirydelta must be greater then zero: %v"
-		err := errors.Errorf(str, funcName, cfg.TBOpts.ExpiryDelta)
+		err := fmt.Errorf(str, funcName, cfg.TBOpts.ExpiryDelta)
 		fmt.Fprintln(os.Stderr, err)
 		return loadConfigError(err)
 	}
@@ -649,7 +648,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 	dbPath := filepath.Join(netDir, walletDbName)
 
 	if cfg.CreateTemp && cfg.Create {
-		err := errors.Errorf("The flags --create and --createtemp can not " +
+		err := fmt.Errorf("The flags --create and --createtemp can not " +
 			"be specified together. Use --help for more information.")
 		fmt.Fprintln(os.Stderr, err)
 		return loadConfigError(err)
@@ -688,7 +687,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 		// Error if the create flag is set and the wallet already
 		// exists.
 		if dbFileExists {
-			err := errors.Errorf("The wallet database file `%v` "+
+			err := fmt.Errorf("The wallet database file `%v` "+
 				"already exists.", dbPath)
 			fmt.Fprintln(os.Stderr, err)
 			return loadConfigError(err)
@@ -705,7 +704,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 		if cfg.CreateWatchingOnly {
 			err = createWatchingOnlyWallet(&cfg)
 		} else {
-			err = createWallet(ctx, &cfg)
+			err = createWallet(&cfg)
 		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Unable to create wallet:", err)
@@ -715,15 +714,17 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 		// Created successfully, so exit now with success.
 		os.Exit(0)
 	} else if !dbFileExists && !cfg.NoInitialLoad {
-		err := errors.Errorf("The wallet does not exist.  Run with the " +
+		err := fmt.Errorf("The wallet does not exist.  Run with the " +
 			"--create option to initialize and create it.")
 		fmt.Fprintln(os.Stderr, err)
 		return loadConfigError(err)
 	}
 
 	if cfg.PoolFees != 0.0 {
-		if !txrules.ValidPoolFeeRate(cfg.PoolFees) {
-			err := errors.E(errors.Invalid, errors.Errorf("pool fee rate %v", cfg.PoolFees))
+		err := txrules.IsValidPoolFeeRate(cfg.PoolFees)
+		if err != nil {
+			err := fmt.Errorf("poolfees '%v' failed to decode: %v",
+				cfg.PoolFees, err)
 			fmt.Fprintln(os.Stderr, err.Error())
 			fmt.Fprintln(os.Stderr, usageMessage)
 			return loadConfigError(err)
@@ -757,18 +758,18 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 			str := "%s: the --noclienttls option may not be used " +
 				"when connecting RPC to non localhost " +
 				"addresses: %s"
-			err := errors.Errorf(str, funcName, cfg.RPCConnect)
+			err := fmt.Errorf(str, funcName, cfg.RPCConnect)
 			fmt.Fprintln(os.Stderr, err)
 			fmt.Fprintln(os.Stderr, usageMessage)
 			return loadConfigError(err)
 		}
 	} else {
-		// If CAFile is unset, choose either the copy or local hxd cert.
+		// If CAFile is unset, choose either the copy or local dcrd cert.
 		if !cfg.CAFile.ExplicitlySet() {
 			cfg.CAFile.Value = filepath.Join(cfg.AppDataDir.Value, defaultCAFilename)
 
 			// If the CA copy does not exist, check if we're connecting to
-			// a local hxd and switch to its RPC cert if it exists.
+			// a local dcrd and switch to its RPC cert if it exists.
 			certExists, err := cfgutil.FileExists(cfg.CAFile.Value)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
@@ -843,7 +844,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 		for _, addr := range cfg.GRPCListeners {
 			_, seen := seenAddresses[addr]
 			if seen && !strings.HasSuffix(addr, ":0") {
-				err := errors.Errorf("Address `%s` may not be "+
+				err := fmt.Errorf("Address `%s` may not be "+
 					"used as a listener address for both "+
 					"RPC servers", addr)
 				fmt.Fprintln(os.Stderr, err)
@@ -861,7 +862,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 			if err != nil {
 				str := "%s: RPC listen interface '%s' is " +
 					"invalid: %v"
-				err := errors.Errorf(str, funcName, addr, err)
+				err := fmt.Errorf(str, funcName, addr, err)
 				fmt.Fprintln(os.Stderr, err)
 				fmt.Fprintln(os.Stderr, usageMessage)
 				return loadConfigError(err)
@@ -870,7 +871,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 				str := "%s: the --noservertls option may not be used " +
 					"when binding RPC to non localhost " +
 					"addresses: %s"
-				err := errors.Errorf(str, funcName, addr)
+				err := fmt.Errorf(str, funcName, addr)
 				fmt.Fprintln(os.Stderr, err)
 				fmt.Fprintln(os.Stderr, usageMessage)
 				return loadConfigError(err)
@@ -883,10 +884,10 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 	cfg.RPCCert.Value = cleanAndExpandPath(cfg.RPCCert.Value)
 	cfg.RPCKey.Value = cleanAndExpandPath(cfg.RPCKey.Value)
 
-	// If the hxd username or password are unset, use the same auth as for
-	// the client.  The two settings were previously shared for hxd and
+	// If the dcrd username or password are unset, use the same auth as for
+	// the client.  The two settings were previously shared for dcrd and
 	// client auth, so this avoids breaking backwards compatibility while
-	// allowing users to use different auth settings for hxd and wallet.
+	// allowing users to use different auth settings for dcrd and wallet.
 	if cfg.DcrdUsername == "" {
 		cfg.DcrdUsername = cfg.Username
 	}
@@ -902,23 +903,6 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 			"move it under the [Ticket Buyer Options] section "+
 			"of %s\n",
 			oldTBConfigFile, configFilePath)
-	}
-
-	// Warn if user still is still using --ticketaddress
-	votingAddress := cfg.TBOpts.VotingAddress.Address
-	if cfg.TicketAddress.Address != nil {
-		log.Warnf("--ticketaddress has been DEPRECATED.  Use " +
-			"--ticketbuyer.votingaddress instead")
-		if votingAddress == nil {
-			votingAddress = cfg.TicketAddress.Address
-		}
-	}
-
-	// Warn if user still is still using --addridxscanlen
-	if cfg.AddrIdxScanLen != defaultGapLimit && cfg.GapLimit == defaultGapLimit {
-		log.Warnf("--addridxscanlen has been DEPRECATED.  Use " +
-			"--gaplimit instead")
-		cfg.GapLimit = cfg.AddrIdxScanLen
 	}
 
 	// Build ticketbuyer config
@@ -942,7 +926,7 @@ func loadConfig(ctx context.Context) (*config, []string, error) {
 		PoolAddress:               cfg.PoolAddress.Address,
 		PoolFees:                  cfg.PoolFees,
 		NoSpreadTicketPurchases:   cfg.TBOpts.NoSpreadTicketPurchases,
-		VotingAddress:             votingAddress,
+		TicketAddress:             cfg.TicketAddress.Address,
 		TxFee:                     int64(cfg.RelayFee.Amount),
 	}
 

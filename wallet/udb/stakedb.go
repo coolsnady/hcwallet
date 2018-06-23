@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2017 The coolsnady developers
+// Copyright (c) 2015-2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -7,15 +7,16 @@ package udb
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"time"
 
 	"github.com/coolsnady/hxd/blockchain/stake"
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxd/wire"
-	"github.com/coolsnady/hxwallet/errors"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	"github.com/coolsnady/hxwallet/apperrors"
+	"github.com/coolsnady/hxwallet/walletdb"
 )
 
 const (
@@ -25,6 +26,14 @@ const (
 	int32Size = 4
 	int64Size = 8
 	hashSize  = 32
+
+	// Size of a serialized ssgenRecord.
+	// hash + uint32 + hash + uint16 + uint64
+	ssgenRecordSize = 32 + 4 + 32 + 2 + 8
+
+	// Size of a serialized ssrtxRecord.
+	// hash + uint32 + hash + uint64
+	ssrtxRecordSize = 32 + 4 + 32 + 8
 
 	// stakePoolUserTicketSize is the size
 	// of a serialized stake pool user
@@ -187,13 +196,15 @@ func deserializeSStxTicketHash160(serializedSStxRecord []byte, dbVersion uint32)
 	case bytes.Equal(prefixBytes, sstxTicket2PKHPrefix):
 		scrHashLoc := pkscriptLoc + 4
 		if scrHashLoc+20 >= len(serializedSStxRecord) {
-			return nil, false, errors.E(errors.IO, "bad sstx record size")
+			return nil, false, stakeStoreError(apperrors.ErrDatabase,
+				"bad serialized sstx record size for pubkey hash", nil)
 		}
 		copy(scriptHash, serializedSStxRecord[scrHashLoc:scrHashLoc+20])
 	case bytes.Equal(prefixBytes, sstxTicket2SHPrefix):
 		scrHashLoc := pkscriptLoc + 3
 		if scrHashLoc+20 >= len(serializedSStxRecord) {
-			return nil, false, errors.E(errors.IO, "bad sstx record size")
+			return nil, false, stakeStoreError(apperrors.ErrDatabase,
+				"bad serialized sstx record size for script hash", nil)
 		}
 		copy(scriptHash, serializedSStxRecord[scrHashLoc:scrHashLoc+20])
 		p2sh = true
@@ -290,6 +301,239 @@ func serializeSStxRecord(record *sstxRecord, dbVersion uint32) ([]byte, error) {
 	}
 }
 
+// deserializeSSGenRecord deserializes the passed serialized tx
+// record information.
+func deserializeSSGenRecord(serializedSSGenRecord []byte) (*ssgenRecord, error) {
+	// Cursory check to make sure that the size of the
+	// record makes sense.
+	if len(serializedSSGenRecord)%ssgenRecordSize != 0 {
+		str := "serialized SSGen record was wrong size"
+		return nil, stakeStoreError(apperrors.ErrDatabase, str, nil)
+	}
+
+	record := new(ssgenRecord)
+
+	curPos := 0
+
+	// Insert the block hash into the record.
+	copy(record.blockHash[:], serializedSSGenRecord[curPos:curPos+hashSize])
+	curPos += hashSize
+
+	// Insert the block height into the record.
+	record.blockHeight = binary.LittleEndian.Uint32(
+		serializedSSGenRecord[curPos : curPos+int32Size])
+	curPos += int32Size
+
+	// Insert the tx hash into the record.
+	copy(record.txHash[:], serializedSSGenRecord[curPos:curPos+hashSize])
+	curPos += hashSize
+
+	// Insert the votebits into the record.
+	record.voteBits = binary.LittleEndian.Uint16(
+		serializedSSGenRecord[curPos : curPos+int16Size])
+	curPos += int16Size
+
+	// Insert the timestamp into the record.
+	record.ts = time.Unix(
+		int64(binary.LittleEndian.Uint64(
+			serializedSSGenRecord[curPos:curPos+int64Size])),
+		0)
+
+	return record, nil
+}
+
+// deserializeSSGenRecords deserializes the passed serialized tx
+// record information.
+func deserializeSSGenRecords(serializedSSGenRecords []byte) ([]*ssgenRecord, error) {
+	// Cursory check to make sure that the number of records
+	// makes sense.
+	if len(serializedSSGenRecords)%ssgenRecordSize != 0 {
+		err := io.ErrUnexpectedEOF
+		return nil, err
+	}
+
+	numRecords := len(serializedSSGenRecords) / ssgenRecordSize
+
+	records := make([]*ssgenRecord, numRecords)
+
+	// Loop through all the ssgen records, deserialize them, and
+	// store them.
+	for i := 0; i < numRecords; i++ {
+		record, err := deserializeSSGenRecord(
+			serializedSSGenRecords[i*ssgenRecordSize : (i+1)*ssgenRecordSize])
+
+		if err != nil {
+			str := "problem serializing ssgen record"
+			return nil, stakeStoreError(apperrors.ErrDatabase, str, err)
+		}
+
+		records[i] = record
+	}
+
+	return records, nil
+}
+
+// serializeSSGenRecord returns the serialization of a single SSGen
+// record.
+func serializeSSGenRecord(record *ssgenRecord) []byte {
+	buf := make([]byte, ssgenRecordSize)
+
+	curPos := 0
+
+	// Write the block hash.
+	copy(buf[curPos:curPos+hashSize], record.blockHash[:])
+	curPos += hashSize
+
+	// Write the block height.
+	binary.LittleEndian.PutUint32(buf[curPos:curPos+int32Size], record.blockHeight)
+	curPos += int32Size
+
+	// Write the tx hash.
+	copy(buf[curPos:curPos+hashSize], record.txHash[:])
+	curPos += hashSize
+
+	// Write the vote bits.
+	binary.LittleEndian.PutUint16(buf[curPos:curPos+int16Size], record.voteBits)
+	curPos += int16Size
+
+	// Write the timestamp.
+	binary.LittleEndian.PutUint64(buf[curPos:curPos+int64Size], uint64(record.ts.Unix()))
+
+	return buf
+}
+
+// serializeSSGenRecords returns the serialization of the passed
+// SSGen records slice.
+func serializeSSGenRecords(records []*ssgenRecord) []byte {
+	numRecords := len(records)
+
+	buf := make([]byte, numRecords*ssgenRecordSize)
+
+	// Serialize and write each record into the slice sequentially.
+	for i := 0; i < numRecords; i++ {
+		recordBytes := serializeSSGenRecord(records[i])
+
+		copy(buf[i*ssgenRecordSize:(i+1)*ssgenRecordSize],
+			recordBytes)
+	}
+
+	return buf
+}
+
+// deserializeSSRtxRecord deserializes the passed serialized SSRtx
+// record information.
+func deserializeSSRtxRecord(serializedSSRtxRecord []byte) (*ssrtxRecord,
+	error) {
+
+	// Cursory check to make sure that the size of the
+	// record makes sense.
+	if len(serializedSSRtxRecord)%ssrtxRecordSize != 0 {
+		str := "serialized SSRtx record was wrong size"
+		return nil, stakeStoreError(apperrors.ErrDatabase, str, nil)
+	}
+
+	record := new(ssrtxRecord)
+
+	curPos := 0
+
+	// Insert the block hash into the record.
+	copy(record.blockHash[:], serializedSSRtxRecord[curPos:curPos+hashSize])
+	curPos += hashSize
+
+	// Insert the block height into the record.
+	record.blockHeight = binary.LittleEndian.Uint32(
+		serializedSSRtxRecord[curPos : curPos+int32Size])
+	curPos += int32Size
+
+	// Insert the tx hash into the record.
+	copy(record.txHash[:], serializedSSRtxRecord[curPos:curPos+hashSize])
+	curPos += hashSize
+
+	// Insert the timestamp into the record.
+	record.ts = time.Unix(
+		int64(binary.LittleEndian.Uint64(
+			serializedSSRtxRecord[curPos:curPos+int64Size])),
+		0)
+
+	return record, nil
+}
+
+// deserializeSSRtxRecords deserializes the passed serialized SSRtx
+// records information.
+func deserializeSSRtxRecords(serializedSSRtxRecords []byte) ([]*ssrtxRecord,
+	error) {
+
+	// Cursory check to make sure that the number of records
+	// makes sense.
+	if len(serializedSSRtxRecords)%ssrtxRecordSize != 0 {
+		err := io.ErrUnexpectedEOF
+		return nil, err
+	}
+
+	numRecords := len(serializedSSRtxRecords) / ssrtxRecordSize
+
+	records := make([]*ssrtxRecord, numRecords)
+
+	// Loop through all the ssgen records, deserialize them, and
+	// store them.
+	for i := 0; i < numRecords; i++ {
+		record, err := deserializeSSRtxRecord(
+			serializedSSRtxRecords[i*ssrtxRecordSize : (i+1)*ssrtxRecordSize])
+
+		if err != nil {
+			str := "problem serializing ssrtx record"
+			return nil, stakeStoreError(apperrors.ErrDatabase, str, err)
+		}
+
+		records[i] = record
+	}
+
+	return records, nil
+}
+
+// serializeSSRtxRecord returns the serialization of the passed
+// SSRtx record.
+func serializeSSRtxRecord(record *ssrtxRecord) []byte {
+	buf := make([]byte, ssrtxRecordSize)
+
+	curPos := 0
+
+	// Write the block hash.
+	copy(buf[curPos:curPos+hashSize], record.blockHash[:])
+	curPos += hashSize
+
+	// Write the block height.
+	binary.LittleEndian.PutUint32(buf[curPos:curPos+int32Size], record.blockHeight)
+	curPos += int32Size
+
+	// Write the tx hash.
+	copy(buf[curPos:curPos+hashSize], record.txHash[:])
+	curPos += hashSize
+
+	// Write the timestamp.
+	binary.LittleEndian.PutUint64(buf[curPos:curPos+int64Size], uint64(record.ts.Unix()))
+
+	return buf
+}
+
+// serializeSSRtxRecords returns the serialization of the passed
+// SSRtx records.
+func serializeSSRtxRecords(records []*ssrtxRecord) []byte {
+	numRecords := len(records)
+
+	buf := make([]byte, numRecords*ssrtxRecordSize)
+
+	// Serialize and write each record into the slice sequentially.
+	for i := 0; i < numRecords; i++ {
+		recordBytes := serializeSSRtxRecord(records[i])
+
+		copy(buf[i*ssrtxRecordSize:(i+1)*ssrtxRecordSize],
+			recordBytes)
+	}
+
+	return buf
+}
+
 // stakeStoreExists returns whether or not the stake store has already
 // been created in the given database namespace.
 func stakeStoreExists(ns walletdb.ReadBucket) bool {
@@ -305,7 +549,8 @@ func fetchSStxRecord(ns walletdb.ReadBucket, hash *chainhash.Hash, dbVersion uin
 	key := hash[:]
 	val := bucket.Get(key)
 	if val == nil {
-		return nil, errors.E(errors.NotExist, errors.Errorf("no ticket purchase %v", hash))
+		str := fmt.Sprintf("missing sstx record for hash '%s'", hash.String())
+		return nil, stakeStoreError(apperrors.ErrSStxNotFound, str, nil)
 	}
 
 	return deserializeSStxRecord(val, dbVersion)
@@ -313,13 +558,16 @@ func fetchSStxRecord(ns walletdb.ReadBucket, hash *chainhash.Hash, dbVersion uin
 
 // fetchSStxRecordSStxTicketHash160 retrieves a ticket 0th output script or
 // pubkeyhash from the sstx records bucket with the given hash.
-func fetchSStxRecordSStxTicketHash160(ns walletdb.ReadBucket, hash *chainhash.Hash, dbVersion uint32) (hash160 []byte, p2sh bool, err error) {
+func fetchSStxRecordSStxTicketHash160(ns walletdb.ReadBucket, hash *chainhash.Hash,
+	dbVersion uint32) (hash160 []byte, p2sh bool, err error) {
+
 	bucket := ns.NestedReadBucket(sstxRecordsBucketName)
 
 	key := hash[:]
 	val := bucket.Get(key)
 	if val == nil {
-		return nil, false, errors.E(errors.NotExist, errors.Errorf("no ticket purchase %v", hash))
+		str := fmt.Sprintf("missing sstx record for hash '%s'", hash.String())
+		return nil, false, stakeStoreError(apperrors.ErrSStxNotFound, str, nil)
 	}
 
 	return deserializeSStxTicketHash160(val, dbVersion)
@@ -332,13 +580,144 @@ func putSStxRecord(ns walletdb.ReadWriteBucket, record *sstxRecord, dbVersion ui
 	// Write the serialized txrecord keyed by the tx hash.
 	serializedSStxRecord, err := serializeSStxRecord(record, dbVersion)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := fmt.Sprintf("failed to serialize sstxrecord '%s'", record.tx.Hash())
+		return stakeStoreError(apperrors.ErrDatabase, str, err)
 	}
 	err = bucket.Put(record.tx.Hash()[:], serializedSStxRecord)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := fmt.Sprintf("failed to store sstxrecord '%s'", record.tx.Hash())
+		return stakeStoreError(apperrors.ErrDatabase, str, err)
 	}
 	return nil
+}
+
+// fetchSSGenRecords retrieves SSGen records from the SSGenRecords bucket with
+// the given hash.
+func fetchSSGenRecords(ns walletdb.ReadBucket, hash *chainhash.Hash) ([]*ssgenRecord, error) {
+	bucket := ns.NestedReadBucket(ssgenRecordsBucketName)
+
+	key := hash[:]
+	val := bucket.Get(key)
+	if val == nil {
+		str := fmt.Sprintf("missing ssgen records for hash '%s'", hash.String())
+		return nil, stakeStoreError(apperrors.ErrSSGensNotFound, str, nil)
+	}
+
+	return deserializeSSGenRecords(val)
+}
+
+// ssgenRecordExistsInRecords checks to see if a record already exists
+// in a slice of ssgen records.
+func ssgenRecordExistsInRecords(record *ssgenRecord, records []*ssgenRecord) bool {
+	for _, r := range records {
+		if r.txHash.IsEqual(&record.txHash) {
+			return true
+		}
+	}
+	return false
+}
+
+// putSSGenRecord updates an SSGen record in the SSGen records bucket.
+func putSSGenRecord(ns walletdb.ReadWriteBucket, hash *chainhash.Hash, record *ssgenRecord) error {
+	// Fetch the current content of the key.
+	// Possible buggy behaviour: If deserialization fails,
+	// we won't detect it here. We assume we're throwing
+	// ErrSSGenNotFound.
+	oldRecords, _ := fetchSSGenRecords(ns, hash)
+
+	// Don't reinsert records we already have.
+	if ssgenRecordExistsInRecords(record, oldRecords) {
+		return nil
+	}
+
+	bucket := ns.NestedReadWriteBucket(ssgenRecordsBucketName)
+
+	var records []*ssgenRecord
+	// Either create a slice if currently nothing exists for this
+	// key in the db, or append the entry to the slice.
+	if oldRecords == nil {
+		records = make([]*ssgenRecord, 1)
+		records[0] = record
+	} else {
+		records = append(oldRecords, record)
+	}
+
+	// Write the serialized SSGens keyed by the sstx hash.
+	serializedSSGenRecords := serializeSSGenRecords(records)
+
+	err := bucket.Put(hash[:], serializedSSGenRecords)
+	if err != nil {
+		str := fmt.Sprintf("failed to store ssgen records '%s'", hash)
+		return stakeStoreError(apperrors.ErrDatabase, str, err)
+	}
+	return nil
+}
+
+// fetchSSRtxRecords retrieves SSRtx records from the SSRtxRecords bucket with
+// the given hash.
+func fetchSSRtxRecords(ns walletdb.ReadBucket, hash *chainhash.Hash) ([]*ssrtxRecord, error) {
+	bucket := ns.NestedReadBucket(ssrtxRecordsBucketName)
+
+	key := hash[:]
+	val := bucket.Get(key)
+	if val == nil {
+		str := fmt.Sprintf("missing ssrtx records for hash '%s'", hash.String())
+		return nil, stakeStoreError(apperrors.ErrSSRtxsNotFound, str, nil)
+	}
+
+	return deserializeSSRtxRecords(val)
+}
+
+// ssrtxRecordExistsInRecords checks to see if a record already exists
+// in a slice of ssrtx records.
+func ssrtxRecordExistsInRecords(record *ssrtxRecord, records []*ssrtxRecord) bool {
+	for _, r := range records {
+		if r.txHash.IsEqual(&record.txHash) {
+			return true
+		}
+	}
+	return false
+}
+
+// updateSSRtxRecord updates an SSRtx record in the SSRtx records bucket.
+func updateSSRtxRecord(ns walletdb.ReadWriteBucket, hash *chainhash.Hash, record *ssrtxRecord) error {
+	// Fetch the current content of the key.
+	// Possible buggy behaviour: If deserialization fails,
+	// we won't detect it here. We assume we're throwing
+	// ErrSSRtxsNotFound.
+	oldRecords, _ := fetchSSRtxRecords(ns, hash)
+
+	// Don't reinsert records we already have.
+	if ssrtxRecordExistsInRecords(record, oldRecords) {
+		return nil
+	}
+
+	bucket := ns.NestedReadWriteBucket(ssrtxRecordsBucketName)
+
+	var records []*ssrtxRecord
+	// Either create a slice if currently nothing exists for this
+	// key in the db, or append the entry to the slice.
+	if oldRecords == nil {
+		records = make([]*ssrtxRecord, 1)
+		records[0] = record
+	} else {
+		records = append(oldRecords, record)
+	}
+
+	// Write the serialized SSRtxs keyed by the sstx hash.
+	serializedSSRtxsRecords := serializeSSRtxRecords(records)
+
+	err := bucket.Put(hash[:], serializedSSRtxsRecords)
+	if err != nil {
+		str := fmt.Sprintf("failed to store ssrtx records '%s'", hash)
+		return stakeStoreError(apperrors.ErrDatabase, str, err)
+	}
+	return nil
+}
+
+// putSSRtxRecord inserts a given SSRtxs record to the SSRtxs records bucket.
+func putSSRtxRecord(ns walletdb.ReadWriteBucket, hash *chainhash.Hash, record *ssrtxRecord) error {
+	return updateSSRtxRecord(ns, hash, record)
 }
 
 // deserializeUserTicket deserializes the passed serialized user
@@ -347,7 +726,8 @@ func deserializeUserTicket(serializedTicket []byte) (*PoolTicket, error) {
 	// Cursory check to make sure that the size of the
 	// ticket makes sense.
 	if len(serializedTicket)%stakePoolUserTicketSize != 0 {
-		return nil, errors.E(errors.IO, "invalid pool ticket record size")
+		str := "serialized pool ticket record was wrong size"
+		return nil, stakeStoreError(apperrors.ErrDatabase, str, nil)
 	}
 
 	record := new(PoolTicket)
@@ -398,8 +778,10 @@ func deserializeUserTickets(serializedTickets []byte) ([]*PoolTicket, error) {
 		record, err := deserializeUserTicket(
 			serializedTickets[i*stakePoolUserTicketSize : (i+
 				1)*stakePoolUserTicketSize])
+
 		if err != nil {
-			return nil, err
+			str := "problem deserializing stake pool user tickets"
+			return nil, stakeStoreError(apperrors.ErrDatabase, str, err)
 		}
 
 		records[i] = record
@@ -466,7 +848,9 @@ func fetchStakePoolUserTickets(ns walletdb.ReadBucket, scriptHash [20]byte) ([]*
 		scriptHash[:])
 	val := bucket.Get(key)
 	if val == nil {
-		return nil, errors.E(errors.NotExist, errors.Errorf("no ticket purchase for hash160 %x", &scriptHash))
+		str := fmt.Sprintf("missing pool user ticket records for hash '%x'",
+			scriptHash)
+		return nil, stakeStoreError(apperrors.ErrPoolUserTicketsNotFound, str, nil)
 	}
 
 	return deserializeUserTickets(val)
@@ -541,7 +925,9 @@ func updateStakePoolUserTickets(ns walletdb.ReadWriteBucket, scriptHash [20]byte
 
 	err := bucket.Put(key, serializedRecords)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := fmt.Sprintf("failed to store pool user ticket records '%x'",
+			scriptHash)
+		return stakeStoreError(apperrors.ErrDatabase, str, err)
 	}
 	return nil
 }
@@ -567,7 +953,8 @@ func deserializeUserInvalTickets(serializedTickets []byte) ([]*chainhash.Hash, e
 		end := (i + 1) * chainhash.HashSize
 		h, err := chainhash.NewHash(serializedTickets[start:end])
 		if err != nil {
-			return nil, err
+			str := "problem deserializing stake pool invalid user tickets"
+			return nil, stakeStoreError(apperrors.ErrDatabase, str, err)
 		}
 
 		records[i] = h
@@ -604,7 +991,9 @@ func fetchStakePoolUserInvalTickets(ns walletdb.ReadBucket, scriptHash [20]byte)
 		scriptHash[:])
 	val := bucket.Get(key)
 	if val == nil {
-		return nil, errors.E(errors.NotExist, errors.Errorf("no pool ticket for hash160 %x", &scriptHash))
+		str := fmt.Sprintf("missing pool user invalid ticket records "+
+			"for hash '%x'", scriptHash)
+		return nil, stakeStoreError(apperrors.ErrPoolUserInvalTcktsNotFound, str, nil)
 	}
 
 	return deserializeUserInvalTickets(val)
@@ -657,7 +1046,9 @@ func removeStakePoolInvalUserTickets(ns walletdb.ReadWriteBucket, scriptHash [20
 
 	err := bucket.Put(key, serializedRecords)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := fmt.Sprintf("failed to store pool user invalid ticket "+
+			"records '%x'", scriptHash)
+		return stakeStoreError(apperrors.ErrDatabase, str, err)
 	}
 
 	return nil
@@ -700,7 +1091,9 @@ func updateStakePoolInvalUserTickets(ns walletdb.ReadWriteBucket, scriptHash [20
 
 	err := bucket.Put(key, serializedRecords)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := fmt.Sprintf("failed to store pool user invalid ticket "+
+			"records '%x'", scriptHash)
+		return stakeStoreError(apperrors.ErrDatabase, str, err)
 	}
 	return nil
 }
@@ -711,27 +1104,32 @@ func initializeEmpty(ns walletdb.ReadWriteBucket) error {
 	// Initialize the buckets and main db fields as needed.
 	mainBucket, err := ns.CreateBucketIfNotExists(mainBucketName)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := "failed to create main bucket"
+		return stakeStoreError(apperrors.ErrDatabase, str, err)
 	}
 
 	_, err = ns.CreateBucketIfNotExists(sstxRecordsBucketName)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := "failed to create sstx records bucket"
+		return stakeStoreError(apperrors.ErrDatabase, str, err)
 	}
 
 	_, err = ns.CreateBucketIfNotExists(ssgenRecordsBucketName)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := "failed to create ssgen records bucket"
+		return stakeStoreError(apperrors.ErrDatabase, str, err)
 	}
 
 	_, err = ns.CreateBucketIfNotExists(ssrtxRecordsBucketName)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := "failed to create ssrtx records bucket"
+		return stakeStoreError(apperrors.ErrDatabase, str, err)
 	}
 
 	_, err = ns.CreateBucketIfNotExists(metaBucketName)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		str := "failed to create meta bucket"
+		return stakeStoreError(apperrors.ErrDatabase, str, err)
 	}
 
 	createBytes := mainBucket.Get(stakeStoreCreateDateName)
@@ -741,7 +1139,8 @@ func initializeEmpty(ns walletdb.ReadWriteBucket) error {
 		binary.LittleEndian.PutUint64(buf[:], createDate)
 		err := mainBucket.Put(stakeStoreCreateDateName, buf[:])
 		if err != nil {
-			return errors.E(errors.IO, err)
+			str := "failed to store database creation time"
+			return stakeStoreError(apperrors.ErrDatabase, str, err)
 		}
 	}
 

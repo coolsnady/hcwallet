@@ -1,5 +1,5 @@
 // Copyright (c) 2013-2017 The btcsuite developers
-// Copyright (c) 2015-2018 The coolsnady developers
+// Copyright (c) 2015-2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/decred/slog"
 	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
 	"github.com/coolsnady/hxwallet/chain"
 	"github.com/coolsnady/hxwallet/loader"
@@ -18,7 +19,6 @@ import (
 	"github.com/coolsnady/hxwallet/ticketbuyer"
 	"github.com/coolsnady/hxwallet/wallet"
 	"github.com/coolsnady/hxwallet/wallet/udb"
-	"github.com/decred/slog"
 	"github.com/jrick/logrotate/rotator"
 )
 
@@ -50,11 +50,11 @@ var (
 	// application shutdown.
 	logRotator *rotator.Rotator
 
-	log          = backendLog.Logger("DCRW")
+	log          = backendLog.Logger("HXW")
 	loaderLog    = backendLog.Logger("LODR")
 	walletLog    = backendLog.Logger("WLLT")
 	tkbyLog      = backendLog.Logger("TKBY")
-	syncLog      = backendLog.Logger("SYNC")
+	chainLog     = backendLog.Logger("CHNS")
 	grpcLog      = backendLog.Logger("GRPC")
 	legacyRPCLog = backendLog.Logger("RPCS")
 )
@@ -65,19 +65,19 @@ func init() {
 	wallet.UseLogger(walletLog)
 	udb.UseLogger(walletLog)
 	ticketbuyer.UseLogger(tkbyLog)
-	chain.UseLogger(syncLog)
-	dcrrpcclient.UseLogger(syncLog)
+	chain.UseLogger(chainLog)
+	dcrrpcclient.UseLogger(chainLog)
 	rpcserver.UseLogger(grpcLog)
 	legacyrpc.UseLogger(legacyRPCLog)
 }
 
 // subsystemLoggers maps each subsystem identifier to its associated logger.
 var subsystemLoggers = map[string]slog.Logger{
-	"DCRW": log,
+	"HXW": log,
 	"LODR": loaderLog,
 	"WLLT": walletLog,
 	"TKBY": tkbyLog,
-	"SYNC": syncLog,
+	"CHNS": chainLog,
 	"GRPC": grpcLog,
 	"RPCS": legacyRPCLog,
 }

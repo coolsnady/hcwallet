@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The coolsnady developers
+// Copyright (c) 2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -27,13 +27,13 @@ import (
 	"github.com/coolsnady/hxd/dcrec/secp256k1"
 	"github.com/coolsnady/hxd/txscript"
 	"github.com/coolsnady/hxd/wire"
-	"github.com/coolsnady/dcrutil"
-	"github.com/coolsnady/dcrutil/hdkeychain"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	"github.com/coolsnady/hxd/hdkeychain"
 	"github.com/coolsnady/hxwallet/wallet/internal/txsizes"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
-	_ "github.com/coolsnady/hxwallet/wallet/internal/walletdb/bdb"
 	"github.com/coolsnady/hxwallet/wallet/txrules"
 	"github.com/coolsnady/hxwallet/wallet/udb"
+	"github.com/coolsnady/hxwallet/walletdb"
+	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
 	"github.com/coolsnady/hxwallet/walletseed"
 )
 
@@ -407,7 +407,7 @@ func createUnsignedRevocation(ticketHash *chainhash.Hash, ticketPurchase *wire.M
 	// Revocations must pay a fee but do so by decreasing one of the output
 	// values instead of increasing the input value and using a change output.
 	// Calculate the estimated signed serialize size.
-	sizeEstimate := txsizes.EstimateSerializeSize(1, revocation.TxOut, false)
+	sizeEstimate := txsizes.EstimateSerializeSize(1, revocation.TxOut, false, udb.AcctypeEc)
 	feeEstimate := txrules.FeeForSerializeSize(feePerKB, sizeEstimate)
 
 	// Reduce the output value of one of the outputs to accomodate for the relay

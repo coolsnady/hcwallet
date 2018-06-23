@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017 The coolsnady developers
+ * Copyright (c) 2016-2017 The Decred developers
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,9 +17,9 @@
 package main
 
 import (
-	"github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxd/txscript"
 	"github.com/coolsnady/hxd/wire"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 )
 
 // makeTx generates a transaction spending outputs to a single address.

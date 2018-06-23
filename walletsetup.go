@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2015 The btcsuite developers
-// Copyright (c) 2015-2018 The coolsnady developers
+// Copyright (c) 2015-2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -7,7 +7,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -15,13 +14,13 @@ import (
 	"strings"
 
 	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxd/hdkeychain"
 	"github.com/coolsnady/hxd/wire"
-	"github.com/coolsnady/hxwallet/errors"
+	"github.com/coolsnady/hxd/hdkeychain"
 	"github.com/coolsnady/hxwallet/internal/prompt"
 	"github.com/coolsnady/hxwallet/loader"
 	"github.com/coolsnady/hxwallet/wallet"
-	_ "github.com/coolsnady/hxwallet/wallet/drivers/bdb"
+	"github.com/coolsnady/hxwallet/walletdb"
+	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
 	"github.com/coolsnady/hxwallet/walletseed"
 )
 
@@ -48,47 +47,28 @@ func networkDir(dataDir string, chainParams *chaincfg.Params) string {
 // provided path. The bool passed back gives whether or not the wallet was
 // restored from seed, while the []byte passed is the private password required
 // to do the initial sync.
-func createWallet(ctx context.Context, cfg *config) error {
+func createWallet(cfg *config) error {
 	dbDir := networkDir(cfg.AppDataDir.Value, activeNet.Params)
 	stakeOptions := &loader.StakeOptions{
 		VotingEnabled: cfg.EnableVoting,
 		AddressReuse:  cfg.ReuseAddresses,
-		VotingAddress: cfg.TBOpts.VotingAddress,
+		TicketAddress: cfg.TicketAddress,
 		TicketFee:     cfg.TicketFee.ToCoin(),
 	}
 	loader := loader.NewLoader(activeNet.Params, dbDir, stakeOptions,
-		cfg.GapLimit, cfg.AllowHighFees, cfg.RelayFee.ToCoin())
+		cfg.AddrIdxScanLen, cfg.AllowHighFees, cfg.RelayFee.ToCoin())
 
-	var privPass, pubPass, seed []byte
-	var imported bool
-	var err error
-	c := make(chan struct{}, 1)
-	go func() {
-		reader := bufio.NewReader(os.Stdin)
-		privPass, pubPass, seed, imported, err = prompt.Setup(reader,
-			[]byte(wallet.InsecurePubPassphrase), []byte(cfg.WalletPass))
-		c <- struct{}{}
-	}()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-c:
-		if err != nil {
-			return err
-		}
-	}
-
-	fmt.Println("Creating the wallet...")
-	w, err := loader.CreateNewWallet(pubPass, privPass, seed)
+	reader := bufio.NewReader(os.Stdin)
+	privPass, pubPass, seed, err := prompt.Setup(reader,
+		[]byte(wallet.InsecurePubPassphrase), []byte(cfg.createPass), []byte(cfg.WalletPass))
 	if err != nil {
 		return err
 	}
 
-	if !imported {
-		err := w.UpgradeToSLIP0044CoinType()
-		if err != nil {
-			return err
-		}
+	fmt.Println("Creating the wallet...")
+	_, err = loader.CreateNewWallet(pubPass, privPass, seed)
+	if err != nil {
+		return err
 	}
 
 	fmt.Println("The wallet has been created successfully.")
@@ -126,7 +106,7 @@ func createSimulationWallet(cfg *config) error {
 	fmt.Println("Creating the wallet...")
 
 	// Create the wallet database backed by bolt db.
-	db, err := wallet.CreateDB("bdb", dbPath)
+	db, err := walletdb.Create("bdb", dbPath)
 	if err != nil {
 		return err
 	}
@@ -181,7 +161,7 @@ func createWatchingOnlyWallet(cfg *config) error {
 	fmt.Println("Creating the wallet...")
 
 	// Create the wallet database backed by bolt db.
-	db, err := wallet.CreateDB("bdb", dbPath)
+	db, err := walletdb.Create("bdb", dbPath)
 	if err != nil {
 		return err
 	}
@@ -207,14 +187,14 @@ func checkCreateDir(path string) error {
 		if os.IsNotExist(err) {
 			// Attempt data directory creation
 			if err = os.MkdirAll(path, 0700); err != nil {
-				return errors.Errorf("cannot create directory: %s", err)
+				return fmt.Errorf("cannot create directory: %s", err)
 			}
 		} else {
-			return errors.Errorf("error checking directory: %s", err)
+			return fmt.Errorf("error checking directory: %s", err)
 		}
 	} else {
 		if !fi.IsDir() {
-			return errors.Errorf("path '%s' is not a directory", path)
+			return fmt.Errorf("path '%s' is not a directory", path)
 		}
 	}
 

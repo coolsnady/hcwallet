@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxd/wire"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
-	_ "github.com/coolsnady/hxwallet/wallet/internal/walletdb/bdb"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	"github.com/coolsnady/hxwallet/walletdb"
+	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
 )
 
 func TestStakeInvalidationOfTip(t *testing.T) {

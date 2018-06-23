@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -18,10 +18,9 @@ import (
 
 	"github.com/coolsnady/hxd/chaincfg"
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxwallet/errors"
 
-	"github.com/coolsnady/hxd/dcrutil"
 	rpc "github.com/coolsnady/hxd/rpcclient"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 )
 
 var (
@@ -56,12 +55,12 @@ var (
 	harnessStateMtx sync.RWMutex
 )
 
-// Harness fully encapsulates an active hxd process, along with an embedded
-// hxwallet to provide a unified platform for creating RPC-driven integration
-// tests involving hxd. The active hxd node will typically be run in simnet
+// Harness fully encapsulates an active dcrd process, along with an embedded
+// dcrwallet to provide a unified platform for creating RPC-driven integration
+// tests involving dcrd. The active dcrd node will typically be run in simnet
 // mode to allow for easy generation of test blockchains. Additionally, a
 // special method is provided which allows one to easily generate coinbase
-// spends. The active hxd process is fully managed by Harness, which handles
+// spends. The active dcrd process is fully managed by Harness, which handles
 // the necessary initialization, and teardown of the process along with any
 // temporary directories created as a result. Multiple Harness instances may be
 // run concurrently, to allow for testing complex scenarios involving multuple
@@ -187,7 +186,7 @@ func NewHarness(activeNet *chaincfg.Params, handlers *rpc.NotificationHandlers,
 func (h *Harness) SetUp(createTestChain bool, numMatureOutputs uint32) error {
 	var err error
 
-	// Start the hxd node itself. This spawns a new process which will be
+	// Start the dcrd node itself. This spawns a new process which will be
 	// managed
 	if err = h.node.Start(); err != nil {
 		return err
@@ -198,7 +197,7 @@ func (h *Harness) SetUp(createTestChain bool, numMatureOutputs uint32) error {
 	}
 	fmt.Println("Node RPC client connected.")
 
-	// Start hxwallet. This spawns a new process which will be managed
+	// Start dcrwallet. This spawns a new process which will be managed
 	if err = h.wallet.Start(); err != nil {
 		return err
 	}
@@ -215,12 +214,12 @@ func (h *Harness) SetUp(createTestChain bool, numMatureOutputs uint32) error {
 		break
 	}
 	if walletClient == nil {
-		return errors.Errorf("walletClient connection timedout")
+		return fmt.Errorf("walletClient connection timedout")
 	}
 	fmt.Println("Wallet RPC client connected.")
 	h.WalletRPC = walletClient
 
-	// Get a new address from the wallet to be set with hxd's --miningaddr
+	// Get a new address from the wallet to be set with dcrd's --miningaddr
 	time.Sleep(5 * time.Second)
 	var miningAddr dcrutil.Address
 	for i := 0; i < 100; i++ {
@@ -231,7 +230,7 @@ func (h *Harness) SetUp(createTestChain bool, numMatureOutputs uint32) error {
 		break
 	}
 	if miningAddr == nil {
-		return errors.Errorf("RPC not up for mining addr %v %v", h.testNodeDir,
+		return fmt.Errorf("RPC not up for mining addr %v %v", h.testNodeDir,
 			h.testWalletDir)
 	}
 	h.miningAddr = miningAddr
@@ -351,7 +350,7 @@ func (h *Harness) IsUp() bool {
 }
 
 // connectRPCClient attempts to establish an RPC connection to the created
-// hxd process belonging to this Harness instance. If the initial connection
+// dcrd process belonging to this Harness instance. If the initial connection
 // attempt fails, this function will retry h.maxConnRetries times, backing off
 // the time between subsequent attempts. If after h.maxConnRetries attempts,
 // we're not able to establish a connection, this function returns with an error.
@@ -369,7 +368,7 @@ func (h *Harness) connectRPCClient() error {
 	}
 
 	if client == nil {
-		return errors.Errorf("connection timed out: %v", err)
+		return fmt.Errorf("connection timed out: %v", err)
 	}
 
 	err = client.NotifyBlocks()
@@ -447,21 +446,21 @@ func generateListeningAddresses() (string, string, string) {
 func (h *Harness) GenerateBlock(startHeight uint32) ([]*chainhash.Hash, error) {
 	blockHashes, err := h.Node.Generate(1)
 	if err != nil {
-		return nil, errors.Errorf("unable to generate single block: %v", err)
+		return nil, fmt.Errorf("unable to generate single block: %v", err)
 	}
 	blockHeader, err := h.Node.GetBlockHeader(blockHashes[0])
 	if err != nil {
-		return nil, errors.Errorf("unable to get block header: %v", err)
+		return nil, fmt.Errorf("unable to get block header: %v", err)
 	}
 	newHeight := blockHeader.Height
 	for newHeight == startHeight {
 		blockHashes, err = h.Node.Generate(1)
 		if err != nil {
-			return nil, errors.Errorf("unable to generate single block: %v", err)
+			return nil, fmt.Errorf("unable to generate single block: %v", err)
 		}
 		blockHeader, err = h.Node.GetBlockHeader(blockHashes[0])
 		if err != nil {
-			return nil, errors.Errorf("unable to get block header: %v", err)
+			return nil, fmt.Errorf("unable to get block header: %v", err)
 		}
 		newHeight = blockHeader.Height
 	}

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 The coolsnady developers
+// Copyright (c) 2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -6,9 +6,17 @@ package udb
 
 import (
 	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxwallet/errors"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
+	"github.com/coolsnady/hxwallet/apperrors"
+	"github.com/coolsnady/hxwallet/walletdb"
 )
+
+func createBucketError(err error, bucketName string) error {
+	return apperrors.E{
+		ErrorCode:   apperrors.ErrDatabase,
+		Description: "failed to create " + bucketName + " bucket",
+		Err:         err,
+	}
+}
 
 // Initialize prepares an empty database for usage by initializing all buckets
 // and key/value pairs.  The database is initialized with the latest version and
@@ -17,15 +25,15 @@ func Initialize(db walletdb.DB, params *chaincfg.Params, seed, pubPass, privPass
 	err := walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
 		addrmgrNs, err := tx.CreateTopLevelBucket(waddrmgrBucketKey)
 		if err != nil {
-			return errors.E(errors.IO, err)
+			return createBucketError(err, "address manager")
 		}
 		txmgrNs, err := tx.CreateTopLevelBucket(wtxmgrBucketKey)
 		if err != nil {
-			return errors.E(errors.IO, err)
+			return createBucketError(err, "transaction store")
 		}
 		stakemgrNs, err := tx.CreateTopLevelBucket(wstakemgrBucketKey)
 		if err != nil {
-			return errors.E(errors.IO, err)
+			return createBucketError(err, "stake store")
 		}
 
 		// Create the address manager, transaction store, and stake store.
@@ -46,14 +54,19 @@ func Initialize(db walletdb.DB, params *chaincfg.Params, seed, pubPass, privPass
 		// it.
 		metadataBucket, err := tx.CreateTopLevelBucket(unifiedDBMetadata{}.rootBucketKey())
 		if err != nil {
-			return errors.E(errors.IO, err)
+			return createBucketError(err, "metadata")
 		}
 		return unifiedDBMetadata{}.putVersion(metadataBucket, initialVersion)
 	})
-	if err != nil {
+	switch err.(type) {
+	case nil:
+	case apperrors.E:
 		return err
+	default:
+		const str = "db update failed"
+		return apperrors.E{ErrorCode: apperrors.ErrDatabase, Description: str, Err: err}
 	}
-	return Upgrade(db, pubPass)
+	return Upgrade(db, pubPass, privPass)
 }
 
 // InitializeWatchOnly prepares an empty database for watching-only wallet usage
@@ -63,15 +76,15 @@ func InitializeWatchOnly(db walletdb.DB, params *chaincfg.Params, hdPubKey strin
 	err := walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
 		addrmgrNs, err := tx.CreateTopLevelBucket(waddrmgrBucketKey)
 		if err != nil {
-			return errors.E(errors.IO, err)
+			return createBucketError(err, "address manager")
 		}
 		txmgrNs, err := tx.CreateTopLevelBucket(wtxmgrBucketKey)
 		if err != nil {
-			return errors.E(errors.IO, err)
+			return createBucketError(err, "transaction store")
 		}
 		stakemgrNs, err := tx.CreateTopLevelBucket(wstakemgrBucketKey)
 		if err != nil {
-			return errors.E(errors.IO, err)
+			return createBucketError(err, "stake store")
 		}
 
 		// Create the address manager, transaction store, and stake store.
@@ -92,12 +105,17 @@ func InitializeWatchOnly(db walletdb.DB, params *chaincfg.Params, hdPubKey strin
 		// it.
 		metadataBucket, err := tx.CreateTopLevelBucket(unifiedDBMetadata{}.rootBucketKey())
 		if err != nil {
-			return errors.E(errors.IO, err)
+			return createBucketError(err, "metadata")
 		}
 		return unifiedDBMetadata{}.putVersion(metadataBucket, initialVersion)
 	})
-	if err != nil {
+	switch err.(type) {
+	case nil:
+	case apperrors.E:
 		return err
+	default:
+		const str = "db update failed"
+		return apperrors.E{ErrorCode: apperrors.ErrDatabase, Description: str, Err: err}
 	}
-	return Upgrade(db, pubPass)
+	return Upgrade(db, pubPass, nil)
 }

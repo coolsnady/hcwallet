@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 The coolsnady developers
+ * Copyright (c) 2016 The Decred developers
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -29,8 +29,8 @@ import (
 	"github.com/coolsnady/hxd/chaincfg"
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
 	"github.com/coolsnady/hxd/dcrjson"
-	"github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxd/wire"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 )
 
 // params is the global representing the chain parameters. It is assigned
@@ -42,7 +42,7 @@ type configJSON struct {
 	TxFee         int64  `json:"txfee"`
 	SendToAddress string `json:"sendtoaddress"`
 	Network       string `json:"network"`
-	HxctlArgs    string `json:"hxctlargs"`
+	DcrctlArgs    string `json:"dcrctlargs"`
 }
 
 // extendedOutPoint is a UTXO with an amount.
@@ -185,8 +185,8 @@ func main() {
 
 	// The command to sign the transaction.
 	var buf bytes.Buffer
-	buf.WriteString("hxctl ")
-	buf.WriteString(cfg.HxctlArgs)
+	buf.WriteString("dcrctl ")
+	buf.WriteString(cfg.DcrctlArgs)
 	buf.WriteString(" signrawtransaction ")
 	buf.WriteString(hex.EncodeToString(txB))
 	buf.WriteString(" '[")
@@ -207,7 +207,7 @@ func main() {
 	}
 	buf.WriteString("]' ")
 	buf.WriteString("| jq -r .hex")
-	err = ioutil.WriteFile("sign.sh", buf.Bytes(), 0755)
+	err = ioutil.WriteFile("sign.sh", []byte(buf.String()), 0755)
 	if err != nil {
 		fmt.Println("Failed to write signing script: ", err.Error())
 		return

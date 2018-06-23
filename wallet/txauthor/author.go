@@ -1,5 +1,5 @@
 // Copyright (c) 2016 The btcsuite developers
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -7,16 +7,18 @@
 package txauthor
 
 import (
+	"errors"
+
 	"github.com/coolsnady/hxd/chaincfg"
 	"github.com/coolsnady/hxd/chaincfg/chainec"
-	"github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxd/txscript"
 	"github.com/coolsnady/hxd/wire"
-	"github.com/coolsnady/hxwallet/errors"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxwallet/wallet/txrules"
 
 	h "github.com/coolsnady/hxwallet/internal/helpers"
 	"github.com/coolsnady/hxwallet/wallet/internal/txsizes"
+	"github.com/coolsnady/hxd/crypto/bliss"
 )
 
 const (
@@ -32,9 +34,32 @@ const (
 // InputSource provides transaction inputs referencing spendable outputs to
 // construct a transaction outputting some target amount.  If the target amount
 // can not be satisified, this can be signaled by returning a total amount less
-// than the target or by returning a more detailed error.
+// than the target or by returning a more detailed error implementing
+// InputSourceError.
 type InputSource func(target dcrutil.Amount) (total dcrutil.Amount,
 	inputs []*wire.TxIn, scripts [][]byte, err error)
+
+// InputSourceError describes the failure to provide enough input value from
+// unspent transaction outputs to meet a target amount.  A typed error is used
+// so input sources can provide their own implementations describing the reason
+// for the error, for example, due to spendable policies or locked coins rather
+// than the wallet not having enough available input value.
+type InputSourceError interface {
+	error
+	InputSourceError()
+}
+
+// InsufficientFundsError is the default implementation of InputSourceError.
+type InsufficientFundsError struct{}
+
+// InputSourceError generates the InputSourceError interface for an
+// InsufficientFundsError.
+func (InsufficientFundsError) InputSourceError() {}
+
+// Error satistifies the error interface.
+func (InsufficientFundsError) Error() string {
+	return "insufficient funds available to construct transaction"
+}
 
 // AuthoredTx holds the state of a newly-created transaction and the change
 // output (if one was added).
@@ -71,31 +96,22 @@ type ChangeSource func() ([]byte, uint16, error)
 //
 // BUGS: Fee estimation may be off when redeeming non-compressed P2PKH outputs.
 func NewUnsignedTransaction(outputs []*wire.TxOut, relayFeePerKb dcrutil.Amount,
-	fetchInputs InputSource, fetchChange ChangeSource) (*AuthoredTx, error) {
-
-	const op errors.Op = "txauthor.NewUnsignedTransaction"
+	fetchInputs InputSource, fetchChange ChangeSource, accType uint8) (*AuthoredTx, error) {
 
 	targetAmount := h.SumOutputValues(outputs)
-	scriptSizers := []txsizes.ScriptSizer{txsizes.P2PKHScriptSize}
-	estimatedSize := txsizes.EstimateSerializeSize(scriptSizers, outputs, true)
+	estimatedSize := txsizes.EstimateSerializeSize(1, outputs, true, accType)
 	targetFee := txrules.FeeForSerializeSize(relayFeePerKb, estimatedSize)
 
 	for {
 		inputAmount, inputs, scripts, err := fetchInputs(targetAmount + targetFee)
 		if err != nil {
-			return nil, errors.E(op, err)
+			return nil, err
 		}
-
 		if inputAmount < targetAmount+targetFee {
-			return nil, errors.E(op, errors.InsufficientBalance)
+			return nil, InsufficientFundsError{}
 		}
 
-		scriptSizers := []txsizes.ScriptSizer{}
-		for range inputs {
-			scriptSizers = append(scriptSizers, txsizes.P2PKHScriptSize)
-		}
-
-		maxSignedSize := txsizes.EstimateSerializeSize(scriptSizers, outputs, true)
+		maxSignedSize := txsizes.EstimateSerializeSize(len(inputs), outputs, true, accType)
 		maxRequiredFee := txrules.FeeForSerializeSize(relayFeePerKb, maxSignedSize)
 		remainingAmount := inputAmount - targetAmount
 		if remainingAmount < maxRequiredFee {
@@ -117,10 +133,10 @@ func NewUnsignedTransaction(outputs []*wire.TxOut, relayFeePerKb dcrutil.Amount,
 			txsizes.P2PKHPkScriptSize, relayFeePerKb) {
 			changeScript, changeScriptVersion, err := fetchChange()
 			if err != nil {
-				return nil, errors.E(op, err)
+				return nil, err
 			}
-			if len(changeScript) > txsizes.P2PKHPkScriptSize {
-				return nil, errors.E(op, "fee estimation requires change "+
+			if len(changeScript) > txsizes.P2PKHPkScriptSize + 1 {
+				return nil, errors.New("fee estimation requires change " +
 					"scripts no larger than P2PKH output scripts")
 			}
 			change := &wire.TxOut{
@@ -133,8 +149,8 @@ func NewUnsignedTransaction(outputs []*wire.TxOut, relayFeePerKb dcrutil.Amount,
 			changeIndex = l
 		}
 
-		estSignedSize := txsizes.EstimateSerializeSize(scriptSizers,
-			unsignedTransaction.TxOut, false)
+		estSignedSize := txsizes.EstimateSerializeSize(len(unsignedTransaction.TxIn),
+			unsignedTransaction.TxOut, false, accType)
 		return &AuthoredTx{
 			Tx:                           unsignedTransaction,
 			PrevScripts:                  scripts,
@@ -193,10 +209,15 @@ func AddAllInputScripts(tx *wire.MsgTx, prevPkScripts [][]byte, secrets SecretsS
 
 	for i := range inputs {
 		pkScript := prevPkScripts[i]
+		sigType := chainec.ECTypeSecp256k1
+		alType, _ := txscript.ExtractPkScriptAltSigType(pkScript)
+		if alType == int(bliss.BSTypeBliss) {
+			sigType = bliss.BSTypeBliss
+		}
 		sigScript := inputs[i].SignatureScript
 		script, err := txscript.SignTxOutput(chainParams, tx, i,
 			pkScript, txscript.SigHashAll, secrets, secrets,
-			sigScript, chainec.ECTypeSecp256k1)
+			sigScript, sigType)
 		if err != nil {
 			return err
 		}

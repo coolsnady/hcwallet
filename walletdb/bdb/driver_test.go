@@ -1,5 +1,5 @@
 // Copyright (c) 2014 The btcsuite developers
-// Copyright (c) 2015 The coolsnady developers
+// Copyright (c) 2015 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -14,8 +14,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
-	_ "github.com/coolsnady/hxwallet/wallet/internal/walletdb/bdb"
+	"github.com/coolsnady/hxwallet/walletdb"
+	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
 )
 
 // dbType is the database type name for this driver.
@@ -26,14 +26,16 @@ const dbType = "bdb"
 func TestCreateOpenFail(t *testing.T) {
 	// Ensure that attempting to open a database that doesn't exist returns
 	// the expected error.
-	if _, err := walletdb.Open(dbType, "noexist.db"); !errors.Is(errors.NotExist, err) {
-		t.Errorf("Open: unexpected error: %v", err)
+	wantErr := walletdb.ErrDbDoesNotExist
+	if _, err := walletdb.Open(dbType, "noexist.db"); err != wantErr {
+		t.Errorf("Open: did not receive expected error - got %v, "+
+			"want %v", err, wantErr)
 		return
 	}
 
 	// Ensure that attempting to open a database with the wrong number of
 	// parameters returns the expected error.
-	wantErr = errors.Errorf("invalid arguments to %s.Open -- expected "+
+	wantErr = fmt.Errorf("invalid arguments to %s.Open -- expected "+
 		"database path", dbType)
 	if _, err := walletdb.Open(dbType, 1, 2, 3); err.Error() != wantErr.Error() {
 		t.Errorf("Open: did not receive expected error - got %v, "+
@@ -43,7 +45,7 @@ func TestCreateOpenFail(t *testing.T) {
 
 	// Ensure that attempting to open a database with an invalid type for
 	// the first parameter returns the expected error.
-	wantErr = errors.Errorf("first argument to %s.Open is invalid -- "+
+	wantErr = fmt.Errorf("first argument to %s.Open is invalid -- "+
 		"expected database path string", dbType)
 	if _, err := walletdb.Open(dbType, 1); err.Error() != wantErr.Error() {
 		t.Errorf("Open: did not receive expected error - got %v, "+
@@ -53,7 +55,7 @@ func TestCreateOpenFail(t *testing.T) {
 
 	// Ensure that attempting to create a database with the wrong number of
 	// parameters returns the expected error.
-	wantErr = errors.Errorf("invalid arguments to %s.Create -- expected "+
+	wantErr = fmt.Errorf("invalid arguments to %s.Create -- expected "+
 		"database path", dbType)
 	if _, err := walletdb.Create(dbType, 1, 2, 3); err.Error() != wantErr.Error() {
 		t.Errorf("Create: did not receive expected error - got %v, "+
@@ -63,7 +65,7 @@ func TestCreateOpenFail(t *testing.T) {
 
 	// Ensure that attempting to open a database with an invalid type for
 	// the first parameter returns the expected error.
-	wantErr = errors.Errorf("first argument to %s.Create is invalid -- "+
+	wantErr = fmt.Errorf("first argument to %s.Create is invalid -- "+
 		"expected database path string", dbType)
 	if _, err := walletdb.Create(dbType, 1); err.Error() != wantErr.Error() {
 		t.Errorf("Create: did not receive expected error - got %v, "+
@@ -82,8 +84,10 @@ func TestCreateOpenFail(t *testing.T) {
 	defer os.Remove(dbPath)
 	db.Close()
 
-	if _, err := db.Namespace([]byte("ns1")); !errors.Is(errors.IO, err) {
-		t.Errorf("Namespace: unexpected error: %v", err)
+	wantErr = walletdb.ErrDbNotOpen
+	if _, err := db.Namespace([]byte("ns1")); err != wantErr {
+		t.Errorf("Namespace: did not receive expected error - got %v, "+
+			"want %v", err, wantErr)
 		return
 	}
 }
@@ -117,12 +121,12 @@ func TestPersistence(t *testing.T) {
 	err = ns1.Update(func(tx walletdb.Tx) error {
 		rootBucket := tx.RootBucket()
 		if rootBucket == nil {
-			return errors.Errorf("RootBucket: unexpected nil root bucket")
+			return fmt.Errorf("RootBucket: unexpected nil root bucket")
 		}
 
 		for k, v := range storeValues {
 			if err := rootBucket.Put([]byte(k), []byte(v)); err != nil {
-				return errors.Errorf("Put: unexpected error: %v", err)
+				return fmt.Errorf("Put: unexpected error: %v", err)
 			}
 		}
 
@@ -152,13 +156,13 @@ func TestPersistence(t *testing.T) {
 	err = ns1.View(func(tx walletdb.Tx) error {
 		rootBucket := tx.RootBucket()
 		if rootBucket == nil {
-			return errors.Errorf("RootBucket: unexpected nil root bucket")
+			return fmt.Errorf("RootBucket: unexpected nil root bucket")
 		}
 
 		for k, v := range storeValues {
 			gotVal := rootBucket.Get([]byte(k))
 			if !reflect.DeepEqual(gotVal, []byte(v)) {
-				return errors.Errorf("Get: key '%s' does not "+
+				return fmt.Errorf("Get: key '%s' does not "+
 					"match expected value - got %s, want %s",
 					k, gotVal, v)
 			}

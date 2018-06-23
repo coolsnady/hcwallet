@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -18,7 +18,7 @@ import (
 	rpc "github.com/coolsnady/hxd/rpcclient"
 )
 
-// walletTestConfig contains all the args, and data required to launch a hxwallet process
+// walletTestConfig contains all the args, and data required to launch a dcrwallet process
 // and connect the rpc client to it.
 type walletTestConfig struct {
 	rpcUser    string
@@ -51,7 +51,7 @@ func newWalletConfig(prefix, caFile, certFile, keyFile string, extra []string) (
 		extra:      extra,
 		prefix:     prefix,
 
-		exe:      "hxwallet",
+		exe:      "dcrwallet",
 		endpoint: "ws",
 		caFile:   caFile,
 		certFile: certFile,
@@ -86,7 +86,7 @@ func (n *walletTestConfig) setDefaults() error {
 }
 
 // arguments returns an array of arguments that be used to launch the
-// hxwallet process.
+// dcrwallet process.
 func (n *walletTestConfig) arguments() []string {
 	args := []string{}
 	// --simnet
@@ -131,14 +131,14 @@ func (n *walletTestConfig) arguments() []string {
 	return args
 }
 
-// command returns the exec.Cmd which will be used to start the hxwallet
+// command returns the exec.Cmd which will be used to start the dcrwallet
 // process.
 func (n *walletTestConfig) command() *exec.Cmd {
 	return exec.Command(n.exe, n.arguments()...)
 }
 
 // rpcConnConfig returns the rpc connection config that can be used
-// to connect to the hxwallet process that is launched via Start().
+// to connect to the dcrwallet process that is launched via Start().
 func (n *walletTestConfig) rpcConnConfig() rpc.ConnConfig {
 	return rpc.ConnConfig{
 		Host:                 n.rpcListen,
@@ -171,7 +171,7 @@ func (n *walletTestConfig) cleanup() error {
 }
 
 // walletTest houses the neccessary state required to configure, launch, and
-// manaage a hxwallet process.
+// manaage a dcrwallet process.
 type walletTest struct {
 	config *walletTestConfig
 
@@ -183,7 +183,7 @@ type walletTest struct {
 
 // newWallet creates a new walletTest instance according to the passed config.
 // dataDir will be used to hold a file recording the pid of the launched
-// process, and as the base for the log and data directories for hxwallet.
+// process, and as the base for the log and data directories for dcrwallet.
 func newWallet(config *walletTestConfig, dataDir string) (*walletTest, error) {
 	return &walletTest{
 		config:  config,
@@ -192,7 +192,7 @@ func newWallet(config *walletTestConfig, dataDir string) (*walletTest, error) {
 	}, nil
 }
 
-// Start creates a new hxwallet process, and writes its pid in a file reserved
+// Start creates a new dcrwallet process, and writes its pid in a file reserved
 // for recording the pid of the launched process. This file can ue used to
 // terminate the process in case of a hang, or panic. In the case of a failing
 // test case, or panic, it is important that the process be stopped via Stop(),
@@ -229,7 +229,7 @@ func (n *walletTest) CertFile() string {
 	return n.config.certFile
 }
 
-// Stop interrupts the running hxwalletTest process process, and waits until it exits
+// Stop interrupts the running dcrwalletTest process process, and waits until it exits
 // properly. On windows, interrupt is not supported, so a kill signal is used
 // instead
 func (n *walletTest) Stop() error {

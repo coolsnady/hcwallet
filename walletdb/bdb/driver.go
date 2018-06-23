@@ -1,5 +1,5 @@
 // Copyright (c) 2014 The btcsuite developers
-// Copyright (c) 2015 The coolsnady developers
+// Copyright (c) 2015 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -8,8 +8,7 @@ package bdb
 import (
 	"fmt"
 
-	"github.com/coolsnady/hxwallet/errors"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
+	"github.com/coolsnady/hxwallet/walletdb"
 )
 
 const (
@@ -19,13 +18,13 @@ const (
 // parseArgs parses the arguments from the walletdb Open/Create methods.
 func parseArgs(funcName string, args ...interface{}) (string, error) {
 	if len(args) != 1 {
-		return "", errors.Errorf("invalid arguments to %s.%s -- "+
+		return "", fmt.Errorf("invalid arguments to %s.%s -- "+
 			"expected database path", dbType, funcName)
 	}
 
 	dbPath, ok := args[0].(string)
 	if !ok {
-		return "", errors.Errorf("first argument to %s.%s is invalid -- "+
+		return "", fmt.Errorf("first argument to %s.%s is invalid -- "+
 			"expected database path string", dbType, funcName)
 	}
 

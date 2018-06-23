@@ -1,11 +1,11 @@
 // Copyright (c) 2015-2016 The btcsuite developers
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 package cfgutil
 
-import "github.com/coolsnady/hxd/dcrutil"
+import dcrutil "github.com/coolsnady/hxd/dcrutil"
 
 // AddressFlag embeds a dcrutil.Address and implements the flags.Marshaler and
 // Unmarshaler interfaces so it can be used as a config struct field.

@@ -1,28 +1,20 @@
 // Copyright (c) 2013-2014 The btcsuite developers
-// Copyright (c) 2015-2016 The coolsnady developers
+// Copyright (c) 2015-2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 package wallet
 
 import (
-	"context"
-	"time"
+	"encoding/hex"
 
+    dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxwallet/errors"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
 	"github.com/coolsnady/hxwallet/wallet/udb"
+	"github.com/coolsnady/hxwallet/walletdb"
 )
 
 const maxBlocksPerRescan = 2000
-
-// RescannedBlock models the relevant data returned during a rescan from a
-// single block.
-type RescannedBlock struct {
-	BlockHash    chainhash.Hash
-	Transactions [][]byte
-}
 
 // TODO: track whether a rescan is already in progress, and cancel either it or
 // this new rescan, keeping the one that still has the most blocks to scan.
@@ -31,16 +23,16 @@ type RescannedBlock struct {
 // startHash and height up through the recorded main chain tip block.  The
 // progress channel, if non-nil, is sent non-error progress notifications with
 // the heights the rescan has completed through, starting with the start height.
-func (w *Wallet) rescan(ctx context.Context, n NetworkBackend,
-	startHash *chainhash.Hash, height int32, p chan<- RescanProgress) error {
+func (w *Wallet) rescan(chainClient *dcrrpcclient.Client, startHash *chainhash.Hash, height int32,
+	p chan<- RescanProgress, cancel <-chan struct{}) error {
 
 	blockHashStorage := make([]chainhash.Hash, maxBlocksPerRescan)
 	rescanFrom := *startHash
 	inclusive := true
 	for {
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
+		case <-cancel:
+			return nil
 		default:
 		}
 
@@ -62,20 +54,24 @@ func (w *Wallet) rescan(ctx context.Context, n NetworkBackend,
 		scanningThrough := height + int32(len(rescanBlocks)) - 1
 		log.Infof("Rescanning blocks %v-%v...", height,
 			scanningThrough)
-		rescanResults, err := n.Rescan(ctx, rescanBlocks)
+		rescanResults, err := chainClient.Rescan(rescanBlocks)
 		if err != nil {
 			return err
 		}
 		var rawBlockHeader udb.RawBlockHeader
 		err = walletdb.Update(w.db, func(dbtx walletdb.ReadWriteTx) error {
 			txmgrNs := dbtx.ReadWriteBucket(wtxmgrNamespaceKey)
-			for _, r := range rescanResults {
-				blockMeta, err := w.TxStore.GetBlockMetaForHash(txmgrNs, &r.BlockHash)
+			for _, r := range rescanResults.DiscoveredData {
+				blockHash, err := chainhash.NewHashFromStr(r.Hash)
+				if err != nil {
+					return err
+				}
+				blockMeta, err := w.TxStore.GetBlockMetaForHash(txmgrNs, blockHash)
 				if err != nil {
 					return err
 				}
 				serHeader, err := w.TxStore.GetSerializedBlockHeader(txmgrNs,
-					&r.BlockHash)
+					blockHash)
 				if err != nil {
 					return err
 				}
@@ -84,12 +80,13 @@ func (w *Wallet) rescan(ctx context.Context, n NetworkBackend,
 					return err
 				}
 
-				for _, tx := range r.Transactions {
-					rec, err := udb.NewTxRecord(tx, time.Now())
+				for _, hexTx := range r.Transactions {
+					serTx, err := hex.DecodeString(hexTx)
 					if err != nil {
 						return err
 					}
-					err = w.processTransaction(dbtx, rec, &rawBlockHeader, &blockMeta)
+					err = w.processSerializedTransaction(dbtx, serTx,
+						&rawBlockHeader, &blockMeta)
 					if err != nil {
 						return err
 					}
@@ -110,53 +107,79 @@ func (w *Wallet) rescan(ctx context.Context, n NetworkBackend,
 }
 
 // Rescan starts a rescan of the wallet for all blocks on the main chain
-// beginning at startHash.  This function blocks until the rescan completes.
-func (w *Wallet) Rescan(ctx context.Context, n NetworkBackend, startHash *chainhash.Hash) error {
-	const op errors.Op = "wallet.Rescan"
+// beginning at startHash.
+//
+// An error channel is returned for consumers of this API, but it is not
+// required to be read.  If the error can not be immediately written to the
+// returned channel, the error will be logged and the channel will be closed.
+func (w *Wallet) Rescan(chainClient *dcrrpcclient.Client, startHash *chainhash.Hash) <-chan error {
+	errc := make(chan error)
 
-	var startHeight int32
-	err := walletdb.View(w.db, func(tx walletdb.ReadTx) error {
-		txmgrNs := tx.ReadBucket(wtxmgrNamespaceKey)
-		header, err := w.TxStore.GetSerializedBlockHeader(txmgrNs, startHash)
+	go func() (err error) {
+		defer func() {
+			select {
+			case errc <- err:
+			default:
+				if err != nil {
+					log.Errorf("Rescan failed: %v", err)
+				}
+				close(errc)
+			}
+		}()
+
+		var startHeight int32
+		err = walletdb.View(w.db, func(tx walletdb.ReadTx) error {
+			txmgrNs := tx.ReadBucket(wtxmgrNamespaceKey)
+			header, err := w.TxStore.GetSerializedBlockHeader(txmgrNs, startHash)
+			if err != nil {
+				return err
+			}
+			startHeight = udb.ExtractBlockHeaderHeight(header)
+			return nil
+		})
 		if err != nil {
 			return err
 		}
-		startHeight = udb.ExtractBlockHeaderHeight(header)
-		return nil
-	})
-	if err != nil {
-		return errors.E(op, err)
-	}
 
-	err = w.rescan(ctx, n, startHash, startHeight, nil)
-	if err != nil {
-		return errors.E(op, err)
-	}
-	return nil
+		return w.rescan(chainClient, startHash, startHeight, nil, nil)
+	}()
+
+	return errc
 }
 
 // RescanFromHeight is an alternative to Rescan that takes a block height
 // instead of a hash.  See Rescan for more details.
-func (w *Wallet) RescanFromHeight(ctx context.Context, n NetworkBackend, startHeight int32) error {
-	const op errors.Op = "wallet.RescanFromHeight"
+func (w *Wallet) RescanFromHeight(chainClient *dcrrpcclient.Client, startHeight int32) <-chan error {
+	errc := make(chan error)
 
-	var startHash chainhash.Hash
-	err := walletdb.View(w.db, func(tx walletdb.ReadTx) error {
-		txmgrNs := tx.ReadBucket(wtxmgrNamespaceKey)
-		var err error
-		startHash, err = w.TxStore.GetMainChainBlockHashForHeight(
-			txmgrNs, startHeight)
-		return err
-	})
-	if err != nil {
-		return errors.E(op, err)
-	}
+	go func() (err error) {
+		defer func() {
+			select {
+			case errc <- err:
+			default:
+				if err != nil {
+					log.Errorf("Rescan failed: %v", err)
+				}
+				close(errc)
+			}
+		}()
 
-	err = w.rescan(ctx, n, &startHash, startHeight, nil)
-	if err != nil {
-		return errors.E(op, err)
-	}
-	return nil
+		var startHash chainhash.Hash
+		err = walletdb.View(w.db, func(tx walletdb.ReadTx) error {
+			txmgrNs := tx.ReadBucket(wtxmgrNamespaceKey)
+			var err error
+			startHash, err = w.TxStore.GetMainChainBlockHashForHeight(
+				txmgrNs, startHeight)
+			return err
+		})
+		if err != nil {
+			return err
+		}
+
+		return w.rescan(chainClient, &startHash, startHeight, nil, nil)
+	}()
+
+	return errc
 }
 
 // RescanProgress records the height the rescan has completed through and any
@@ -170,11 +193,7 @@ type RescanProgress struct {
 // the main chain starting at startHeight.  Progress notifications and any
 // errors are sent to the channel p.  This function blocks until the rescan
 // completes or ends in an error.  p is closed before returning.
-func (w *Wallet) RescanProgressFromHeight(ctx context.Context, n NetworkBackend,
-	startHeight int32, p chan<- RescanProgress) {
-
-	const op errors.Op = "wallet.RescanProgressFromHeight"
-
+func (w *Wallet) RescanProgressFromHeight(chainClient *dcrrpcclient.Client, startHeight int32, p chan<- RescanProgress, cancel <-chan struct{}) {
 	defer close(p)
 
 	var startHash chainhash.Hash
@@ -186,12 +205,12 @@ func (w *Wallet) RescanProgressFromHeight(ctx context.Context, n NetworkBackend,
 		return err
 	})
 	if err != nil {
-		p <- RescanProgress{Err: errors.E(op, err)}
+		p <- RescanProgress{Err: err}
 		return
 	}
 
-	err = w.rescan(ctx, n, &startHash, startHeight, p)
+	err = w.rescan(chainClient, &startHash, startHeight, p, cancel)
 	if err != nil {
-		p <- RescanProgress{Err: errors.E(op, err)}
+		p <- RescanProgress{Err: err}
 	}
 }

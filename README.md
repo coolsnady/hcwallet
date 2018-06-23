@@ -1,7 +1,9 @@
 hxwallet
 =========
 
-hxwallet is a daemon handling coolsnady wallet functionality for a
+[![ISC License](http://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
+
+hxwallet is a daemon handling hx wallet functionality for a
 single user.  It acts as both an RPC client to hxd and an RPC server
 for wallet clients and legacy RPC applications.
 
@@ -51,45 +53,45 @@ Wallet clients can use one of two RPC servers:
      need notifications for changes to the wallet, this is the RPC server to
      use. The gRPC server is documented [here](./rpc/documentation/README.md).
 
+## Current State
+
+This project is currently under active development and is in a Beta state. The default branch of hxwallet is currently testnet1. Please make sure to use --testnet flag when running hxwallet and report any issues by using the integrated issue tracker. Do not yet use this software yet as a store of value!
+
+MAKE SURE TO SAVE YOUR WALLET SEED SO YOU CAN RECOVER YOUR KEYS IF THE WALLET FAILS!
+
 ## Installation and updating
-
-### Windows - MSIs Available
-
-Install the latest MSIs available here:
-
-https://github.com/coolsnady/coolsnady-release/releases
 
 ### Windows/Linux/BSD/POSIX - Build from source
 
 Building or updating from source requires the following build dependencies:
 
-- **Go 1.9 or 1.10**
+- **Go 1.8 or 1.9**
 
   Installation instructions can be found here: http://golang.org/doc/install.
   It is recommended to add `$GOPATH/bin` to your `PATH` at this point.
 
-- **Dep**
+- **Glide**
 
-  Dep is used to manage project dependencies and provide reproducible builds.
-  It is recommended to use the latest Dep release, unless a bug prevents doing
+  Glide is used to manage project dependencies and provide reproducible builds.
+  It is recommended to use the latest Glide release, unless a bug prevents doing
   so.  The latest releases (for both binary and source) can be found
-  [here](https://github.com/golang/dep/releases).
+  [here](https://github.com/Masterminds/glide/releases).
 
-Unfortunately, the use of `dep` prevents a handy tool such as `go get` from
+Unfortunately, the use of `glide` prevents a handy tool such as `go get` from
 automatically downloading, building, and installing the source in a single
 command.  Instead, the latest project and dependency sources must be first
-obtained manually with `git` and `dep`, and then `go` is used to build and
+obtained manually with `git` and `glide`, and then `go` is used to build and
 install the project.
 
 **Getting the source**:
 
 For a first time installation, the project and dependency sources can be
-obtained manually with `git` and `dep` (create directories as needed):
+obtained manually with `git` and `glide` (create directories as needed):
 
 ```
 git clone https://github.com/coolsnady/hxwallet $GOPATH/src/github.com/coolsnady/hxwallet
 cd $GOPATH/src/github.com/coolsnady/hxwallet
-dep ensure
+glide install
 ```
 
 To update an existing source tree, pull the latest changes and install the
@@ -98,7 +100,7 @@ matching dependencies:
 ```
 cd $GOPATH/src/github.com/coolsnady/hxwallet
 git pull
-dep ensure
+glide install
 ```
 
 **Building/Installing**:
@@ -127,20 +129,6 @@ To build a `hxwallet` executable and place it in the current directory:
 go build
 ```
 
-## Docker
-
-All tests and linters may be run in a docker container using the script `run_tests.sh`.  This script defaults to using the current supported version of go.  You can run it with the major version of go you would like to use as the only arguement to test a previous on a previous version of go (generally coolsnady supports the current version of go and the previous one).
-
-```
-./run_tests.sh 1.9
-```
-
-To run the tests locally without docker:
-
-```
-./run_tests.sh local
-```
-
 ## Getting Started
 
 The following instructions detail how to get started with hxwallet connecting
@@ -150,19 +138,19 @@ Windows, or any terminal emulator on *nix.
 - Run the following command to start hxd:
 
 ```
-hxd -u rpcuser -P rpcpass
+hxd -u rpcuser -P rpcpass --testnet
 ```
 
 - Run the following command to create a wallet:
 
 ```
-hxwallet -u rpcuser -P rpcpass --create
+hxwallet -u rpcuser -P rpcpass --testnet --create
 ```
 
 - Run the following command to start hxwallet:
 
 ```
-hxwallet -u rpcuser -P rpcpass
+hxwallet -u rpcuser -P rpcpass --testnet
 ```
 
 If everything appears to be working, it is recommended at this point to

@@ -1,5 +1,5 @@
 // Copyright (c) 2016 The btcsuite developers
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -8,9 +8,8 @@ package txauthor_test
 import (
 	"testing"
 
-	"github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxd/wire"
-	"github.com/coolsnady/hxwallet/errors"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 	. "github.com/coolsnady/hxwallet/wallet/txauthor"
 	"github.com/coolsnady/hxwallet/wallet/txrules"
 
@@ -63,7 +62,7 @@ func TestNewUnsignedTransaction(t *testing.T) {
 			Outputs:        p2pkhOutputs(1e6),
 			RelayFee:       1e3,
 			ChangeAmount: 1e8 - 1e6 - txrules.FeeForSerializeSize(1e3,
-				txsizes.EstimateSerializeSize([]txsizes.ScriptSizer{txsizes.P2PKHScriptSize}, p2pkhOutputs(1e6), true)),
+				txsizes.EstimateSerializeSize(1, p2pkhOutputs(1e6), true)),
 			InputCount: 1,
 		},
 		2: {
@@ -71,7 +70,7 @@ func TestNewUnsignedTransaction(t *testing.T) {
 			Outputs:        p2pkhOutputs(1e6),
 			RelayFee:       1e4,
 			ChangeAmount: 1e8 - 1e6 - txrules.FeeForSerializeSize(1e4,
-				txsizes.EstimateSerializeSize([]txsizes.ScriptSizer{txsizes.P2PKHScriptSize}, p2pkhOutputs(1e6), true)),
+				txsizes.EstimateSerializeSize(1, p2pkhOutputs(1e6), true)),
 			InputCount: 1,
 		},
 		3: {
@@ -79,7 +78,7 @@ func TestNewUnsignedTransaction(t *testing.T) {
 			Outputs:        p2pkhOutputs(1e6, 1e6, 1e6),
 			RelayFee:       1e4,
 			ChangeAmount: 1e8 - 3e6 - txrules.FeeForSerializeSize(1e4,
-				txsizes.EstimateSerializeSize([]txsizes.ScriptSizer{txsizes.P2PKHScriptSize}, p2pkhOutputs(1e6, 1e6, 1e6), true)),
+				txsizes.EstimateSerializeSize(1, p2pkhOutputs(1e6, 1e6, 1e6), true)),
 			InputCount: 1,
 		},
 		4: {
@@ -87,7 +86,7 @@ func TestNewUnsignedTransaction(t *testing.T) {
 			Outputs:        p2pkhOutputs(1e6, 1e6, 1e6),
 			RelayFee:       2.55e3,
 			ChangeAmount: 1e8 - 3e6 - txrules.FeeForSerializeSize(2.55e3,
-				txsizes.EstimateSerializeSize([]txsizes.ScriptSizer{txsizes.P2PKHScriptSize}, p2pkhOutputs(1e6, 1e6, 1e6), true)),
+				txsizes.EstimateSerializeSize(1, p2pkhOutputs(1e6, 1e6, 1e6), true)),
 			InputCount: 1,
 		},
 
@@ -95,7 +94,7 @@ func TestNewUnsignedTransaction(t *testing.T) {
 		5: {
 			UnspentOutputs: p2pkhOutputs(1e8),
 			Outputs: p2pkhOutputs(1e8 - 602 - txrules.FeeForSerializeSize(1e3,
-				txsizes.EstimateSerializeSize([]txsizes.ScriptSizer{txsizes.P2PKHScriptSize}, p2pkhOutputs(0), true))),
+				txsizes.EstimateSerializeSize(1, p2pkhOutputs(0), true))),
 			RelayFee:     1e3,
 			ChangeAmount: 0,
 			InputCount:   1,
@@ -103,7 +102,7 @@ func TestNewUnsignedTransaction(t *testing.T) {
 		6: {
 			UnspentOutputs: p2pkhOutputs(1e8),
 			Outputs: p2pkhOutputs(1e8 - 603 - txrules.FeeForSerializeSize(1e3,
-				txsizes.EstimateSerializeSize([]txsizes.ScriptSizer{txsizes.P2PKHScriptSize}, p2pkhOutputs(0), true))),
+				txsizes.EstimateSerializeSize(1, p2pkhOutputs(0), true))),
 			RelayFee:     1e3,
 			ChangeAmount: 603,
 			InputCount:   1,
@@ -113,7 +112,7 @@ func TestNewUnsignedTransaction(t *testing.T) {
 		7: {
 			UnspentOutputs: p2pkhOutputs(1e8),
 			Outputs: p2pkhOutputs(1e8 - 1537 - txrules.FeeForSerializeSize(2.55e3,
-				txsizes.EstimateSerializeSize([]txsizes.ScriptSizer{txsizes.P2PKHScriptSize}, p2pkhOutputs(0), true))),
+				txsizes.EstimateSerializeSize(1, p2pkhOutputs(0), true))),
 			RelayFee:     2.55e3,
 			ChangeAmount: 0,
 			InputCount:   1,
@@ -121,7 +120,7 @@ func TestNewUnsignedTransaction(t *testing.T) {
 		8: {
 			UnspentOutputs: p2pkhOutputs(1e8),
 			Outputs: p2pkhOutputs(1e8 - 1538 - txrules.FeeForSerializeSize(2.55e3,
-				txsizes.EstimateSerializeSize([]txsizes.ScriptSizer{txsizes.P2PKHScriptSize}, p2pkhOutputs(0), true))),
+				txsizes.EstimateSerializeSize(1, p2pkhOutputs(0), true))),
 			RelayFee:     2.55e3,
 			ChangeAmount: 1538,
 			InputCount:   1,
@@ -133,7 +132,7 @@ func TestNewUnsignedTransaction(t *testing.T) {
 		9: {
 			UnspentOutputs: p2pkhOutputs(1e8, 1e8),
 			Outputs: p2pkhOutputs(1e8 - 603 - txrules.FeeForSerializeSize(1e3,
-				txsizes.EstimateSerializeSize([]txsizes.ScriptSizer{txsizes.P2PKHScriptSize}, p2pkhOutputs(0), true))),
+				txsizes.EstimateSerializeSize(1, p2pkhOutputs(0), true))),
 			RelayFee:     1e3,
 			ChangeAmount: 603,
 			InputCount:   1,
@@ -147,7 +146,7 @@ func TestNewUnsignedTransaction(t *testing.T) {
 		10: {
 			UnspentOutputs: p2pkhOutputs(1e8, 1e8),
 			Outputs: p2pkhOutputs(1e8 - 545 - txrules.FeeForSerializeSize(1e3,
-				txsizes.EstimateSerializeSize([]txsizes.ScriptSizer{txsizes.P2PKHScriptSize}, p2pkhOutputs(0), true))),
+				txsizes.EstimateSerializeSize(1, p2pkhOutputs(0), true))),
 			RelayFee:     1e3,
 			ChangeAmount: 0,
 			InputCount:   1,
@@ -159,7 +158,7 @@ func TestNewUnsignedTransaction(t *testing.T) {
 			Outputs:        p2pkhOutputs(1e8),
 			RelayFee:       1e3,
 			ChangeAmount: 1e8 - txrules.FeeForSerializeSize(1e3,
-				txsizes.EstimateSerializeSize([]txsizes.ScriptSizer{txsizes.P2PKHScriptSize, txsizes.P2PKHScriptSize}, p2pkhOutputs(1e8), true)),
+				txsizes.EstimateSerializeSize(2, p2pkhOutputs(1e8), true)),
 			InputCount: 2,
 		},
 
@@ -182,17 +181,16 @@ func TestNewUnsignedTransaction(t *testing.T) {
 	for i, test := range tests {
 		inputSource := makeInputSource(test.UnspentOutputs)
 		tx, err := NewUnsignedTransaction(test.Outputs, test.RelayFee, inputSource, changeSource)
-		if err != nil {
-			insufficientBalance := errors.Is(errors.InsufficientBalance, err)
-			if insufficientBalance != test.InputSourceError {
-				if !test.InputSourceError {
-					t.Errorf("Test %d: InsufficientBalance=%v expected %v", i, insufficientBalance, test.InputSourceError)
-				}
-				continue
-			} else if !insufficientBalance {
-				t.Errorf("Test %d: Unexpected error: %v", i, err)
-				continue
+		switch e := err.(type) {
+		case nil:
+		case InputSourceError:
+			if !test.InputSourceError {
+				t.Errorf("Test %d: Returned InputSourceError but expected "+
+					"change output with amount %v", i, test.ChangeAmount)
 			}
+			continue
+		default:
+			t.Errorf("Test %d: Unexpected error: %v", i, e)
 			continue
 		}
 		if tx.ChangeIndex < 0 {

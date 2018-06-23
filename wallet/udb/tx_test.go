@@ -1,5 +1,5 @@
 // Copyright (c) 2013-2015 The btcsuite developers
-// Copyright (c) 2015 The coolsnady developers
+// Copyright (c) 2015 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -18,10 +18,10 @@ import (
 
 	"github.com/coolsnady/hxd/chaincfg"
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxd/wire"
-	_ "github.com/coolsnady/hxwallet/wallet/drivers/bdb"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	"github.com/coolsnady/hxwallet/walletdb"
+	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
 )
 
 // Received transaction output for mainnet outpoint
@@ -106,7 +106,7 @@ func TestInsertsCreditsDebitsRollbacks(t *testing.T) {
 		return
 	}
 
-	// Switch txout amount to 1 HXD.  Transaction store doesn't
+	// Switch txout amount to 1 DCR.  Transaction store doesn't
 	// validate txs, so this is fine for testing a double spend
 	// removal.
 
@@ -698,7 +698,7 @@ func TestCoinbases(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Balance should be 0 if the coinbase is immature, 50 HXD at and beyond
+	// Balance should be 0 if the coinbase is immature, 50 DCR at and beyond
 	// maturity.
 	//
 	// Outputs when depth is below maturity are never included, no matter

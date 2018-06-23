@@ -1,10 +1,11 @@
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 package ticketbuyer
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"sync"
@@ -12,9 +13,8 @@ import (
 
 	"github.com/coolsnady/hxd/blockchain"
 	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxd/dcrutil"
 	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
-	"github.com/coolsnady/hxwallet/errors"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxwallet/wallet"
 )
 
@@ -75,7 +75,7 @@ type Config struct {
 	PoolAddress               dcrutil.Address
 	PoolFees                  float64
 	NoSpreadTicketPurchases   bool
-	VotingAddress             dcrutil.Address
+	TicketAddress             dcrutil.Address
 	TxFee                     int64
 }
 
@@ -87,7 +87,7 @@ type TicketPurchaser struct {
 	activeNet        *chaincfg.Params
 	dcrdChainSvr     *dcrrpcclient.Client
 	wallet           *wallet.Wallet
-	votingAddress    dcrutil.Address
+	ticketAddress    dcrutil.Address
 	poolAddress      dcrutil.Address
 	firstStart       bool
 	windowPeriod     int          // The current window period
@@ -117,7 +117,6 @@ type TicketPurchaser struct {
 
 // Config returns the current ticket buyer configuration.
 func (t *TicketPurchaser) Config() (*Config, error) {
-	defer t.purchaserMtx.Unlock()
 	t.purchaserMtx.Lock()
 	accountName, err := t.wallet.AccountName(t.account)
 	if err != nil {
@@ -143,9 +142,10 @@ func (t *TicketPurchaser) Config() (*Config, error) {
 		PoolAddress:               t.cfg.PoolAddress,
 		PoolFees:                  t.poolFees,
 		NoSpreadTicketPurchases:   t.cfg.NoSpreadTicketPurchases,
-		TxFee:         t.cfg.TxFee,
-		VotingAddress: t.cfg.VotingAddress,
+		TicketAddress:             t.cfg.TicketAddress,
+		TxFee:                     t.cfg.TxFee,
 	}
+	t.purchaserMtx.Unlock()
 	return config, nil
 }
 
@@ -248,18 +248,18 @@ func (t *TicketPurchaser) SetMinFee(minFee int64) {
 	t.purchaserMtx.Unlock()
 }
 
-// VotingAddress returns the address to send ticket outputs to.
-func (t *TicketPurchaser) VotingAddress() dcrutil.Address {
+// TicketAddress returns the address to send ticket outputs to.
+func (t *TicketPurchaser) TicketAddress() dcrutil.Address {
 	t.purchaserMtx.Lock()
-	votingAddress := t.votingAddress
+	ticketAddress := t.ticketAddress
 	t.purchaserMtx.Unlock()
-	return votingAddress
+	return ticketAddress
 }
 
-// SetVotingAddress sets the address to send ticket outputs to.
-func (t *TicketPurchaser) SetVotingAddress(votingAddress dcrutil.Address) {
+// SetTicketAddress sets the address to send ticket outputs to.
+func (t *TicketPurchaser) SetTicketAddress(ticketAddress dcrutil.Address) {
 	t.purchaserMtx.Lock()
-	t.votingAddress = votingAddress
+	t.ticketAddress = ticketAddress
 	t.purchaserMtx.Unlock()
 }
 
@@ -362,7 +362,7 @@ func NewTicketPurchaser(cfg *Config,
 		dcrdChainSvr:  dcrdChainSvr,
 		wallet:        w,
 		firstStart:    true,
-		votingAddress: cfg.VotingAddress,
+		ticketAddress: cfg.TicketAddress,
 		poolAddress:   cfg.PoolAddress,
 		useMedian:     cfg.FeeSource == TicketFeeMedian,
 		priceMode:     priceMode,
@@ -482,7 +482,7 @@ func (t *TicketPurchaser) Purchase(height int64) (*PurchaseStats, error) {
 
 	avgPriceAmt, err := t.calcAverageTicketPrice(height)
 	if err != nil {
-		return ps, errors.Errorf("Failed to calculate average ticket "+
+		return ps, fmt.Errorf("Failed to calculate average ticket "+
 			" price amount at height %v: %v", height, err)
 	}
 	if avgPriceAmt < dcrutil.Amount(t.activeNet.MinimumStakeDiff) {
@@ -571,7 +571,7 @@ func (t *TicketPurchaser) Purchase(height int64) (*PurchaseStats, error) {
 		return ps, err
 	}
 	if len(info.FeeInfoBlocks) < 1 {
-		return ps, errors.Errorf("error FeeInfoBlocks bad length")
+		return ps, fmt.Errorf("error FeeInfoBlocks bad length")
 	}
 	ticketPurchasesInLastBlock := int(info.FeeInfoBlocks[0].Number)
 	log.Tracef("Ticket purchase slots filled in last block: %v", ticketPurchasesInLastBlock)
@@ -694,14 +694,14 @@ func (t *TicketPurchaser) Purchase(height int64) (*PurchaseStats, error) {
 		// Amount of tickets that can be bought per block with current and redeemed funds
 		buyPerBlockAll := tixCanBuyAll / float64(blocksRemaining)
 
-		log.Debugf("Your average purchase price for tickets in the pool is %.2f HXD", yourAvgTixPrice)
-		log.Debugf("Available funds of %.2f HXD can buy %.2f tickets, %.2f tickets per block",
+		log.Debugf("Your average purchase price for tickets in the pool is %.2f HX", yourAvgTixPrice)
+		log.Debugf("Available funds of %.2f HX can buy %.2f tickets, %.2f tickets per block",
 			bal.Spendable.ToCoin()-balanceToMaintainAmt, tixCanBuy, buyPerBlock)
 		log.Debugf("With %.2f%% proportion live, you will redeem ~%.2f tickets in the remaining %d blocks",
 			proportionLive*100, tixWillRedeem, blocksRemaining)
-		log.Debugf("Redeemed ticket value expected is %.2f HXD, buys %.2f tickets, %.2f%% more",
+		log.Debugf("Redeemed ticket value expected is %.2f HX, buys %.2f tickets, %.2f%% more",
 			redeemedFunds, tixToBuyWithRedeemedFunds, tixToBuyWithRedeemedFunds/tixCanBuy*100)
-		log.Debugf("Stake reward expected is %.2f HXD, buys %.2f tickets, %.2f%% more",
+		log.Debugf("Stake reward expected is %.2f HX, buys %.2f tickets, %.2f%% more",
 			stakeRewardFunds, tixToBuyWithStakeRewardFunds, tixToBuyWithStakeRewardFunds/tixCanBuy*100)
 		log.Infof("Will buy ~%.2f tickets per block, %.2f ticket purchases remain this window", buyPerBlockAll, tixCanBuyAll)
 
@@ -806,9 +806,9 @@ func (t *TicketPurchaser) Purchase(height int64) (*PurchaseStats, error) {
 
 	// If an address wasn't passed, create an internal address in
 	// the wallet for the ticket address.
-	votingAddress := t.VotingAddress()
-	if votingAddress == nil {
-		votingAddress, err = t.wallet.NewInternalAddress(account, wallet.WithGapPolicyWrap())
+	ticketAddress := t.TicketAddress()
+	if ticketAddress == nil {
+		ticketAddress, err = t.wallet.NewInternalAddress(account, wallet.WithGapPolicyWrap())
 		if err != nil {
 			return ps, err
 		}
@@ -825,7 +825,7 @@ func (t *TicketPurchaser) Purchase(height int64) (*PurchaseStats, error) {
 	hashes, purchaseErr := t.wallet.PurchaseTickets(0,
 		maxPriceAmt,
 		0, // 0 minconf is used so tickets can be bought from split outputs
-		votingAddress,
+		ticketAddress,
 		account,
 		toBuyForBlock,
 		t.PoolAddress(),

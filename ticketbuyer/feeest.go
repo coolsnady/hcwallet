@@ -1,14 +1,14 @@
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 package ticketbuyer
 
 import (
+	"fmt"
 	"sort"
 
-	"github.com/coolsnady/hxd/dcrutil"
-	"github.com/coolsnady/hxwallet/errors"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 )
 
 const (
@@ -49,7 +49,7 @@ func (t *TicketPurchaser) findClosestFeeWindows(difficulty dcrutil.Amount,
 	}
 
 	if len(info.FeeInfoWindows) == 0 {
-		return 0.0, errors.Errorf("not enough windows to find mean fee " +
+		return 0.0, fmt.Errorf("not enough windows to find mean fee " +
 			"available")
 	}
 

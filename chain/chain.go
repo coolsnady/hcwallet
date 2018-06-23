@@ -1,11 +1,13 @@
 // Copyright (c) 2013-2015 The btcsuite developers
-// Copyright (c) 2015-2016 The coolsnady developers
+// Copyright (c) 2015-2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 package chain
 
 import (
+	"errors"
+	"fmt"
 	"context"
 	"sync"
 	"time"
@@ -13,17 +15,17 @@ import (
 	"github.com/coolsnady/hxd/chaincfg"
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
 	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
-	"github.com/coolsnady/hxwallet/errors"
 )
 
 var requiredChainServerAPI = semver{major: 3, minor: 1, patch: 0}
 
-// RPCClient represents a persistent client connection to a coolsnady RPC server
+// RPCClient represents a persistent client connection to a decred RPC server
 // for information regarding the current best block chain.
 type RPCClient struct {
 	*dcrrpcclient.Client
-	connConfig  *dcrrpcclient.ConnConfig // Work around unexported field
-	chainParams *chaincfg.Params
+	connConfig        *dcrrpcclient.ConnConfig // Work around unexported field
+	chainParams       *chaincfg.Params
+	reconnectAttempts int
 
 	enqueueNotification       chan interface{}
 	dequeueNotification       chan interface{}
@@ -40,10 +42,14 @@ type RPCClient struct {
 // connect string.  If disableTLS is false, the remote RPC certificate must be
 // provided in the certs slice.  The connection is not established immediately,
 // but must be done using the Start method.  If the remote server does not
-// operate on the same coolsnady network as described by the passed chain
+// operate on the same bitcoin network as described by the passed chain
 // parameters, the connection will be disconnected.
 func NewRPCClient(chainParams *chaincfg.Params, connect, user, pass string, certs []byte,
-	disableTLS bool) (*RPCClient, error) {
+	disableTLS bool, reconnectAttempts int) (*RPCClient, error) {
+
+	if reconnectAttempts < 0 {
+		return nil, errors.New("reconnectAttempts must be positive")
+	}
 
 	client := &RPCClient{
 		connConfig: &dcrrpcclient.ConnConfig{
@@ -57,6 +63,7 @@ func NewRPCClient(chainParams *chaincfg.Params, connect, user, pass string, cert
 			DisableTLS:           disableTLS,
 		},
 		chainParams:               chainParams,
+		reconnectAttempts:         reconnectAttempts,
 		enqueueNotification:       make(chan interface{}),
 		dequeueNotification:       make(chan interface{}),
 		enqueueVotingNotification: make(chan interface{}),
@@ -64,6 +71,7 @@ func NewRPCClient(chainParams *chaincfg.Params, connect, user, pass string, cert
 		quit: make(chan struct{}),
 	}
 	ntfnCallbacks := &dcrrpcclient.NotificationHandlers{
+		OnClientConnected:       client.onClientConnect,
 		OnBlockConnected:        client.onBlockConnected,
 		OnBlockDisconnected:     client.onBlockDisconnected,
 		OnRelevantTxAccepted:    client.onRelevantTxAccepted,
@@ -86,11 +94,9 @@ func NewRPCClient(chainParams *chaincfg.Params, connect, user, pass string, cert
 // function gives up, and therefore will not block forever waiting for the
 // connection to be established to a server that may not exist.
 func (c *RPCClient) Start(ctx context.Context, retry bool) (err error) {
-	const op errors.Op = "rpcclient.Start"
-
-	err = c.Client.Connect(ctx, retry)
+	err = c.Connect(ctx, retry)
 	if err != nil {
-		return errors.E(op, errors.IO, err)
+		return err
 	}
 
 	defer func() {
@@ -100,17 +106,17 @@ func (c *RPCClient) Start(ctx context.Context, retry bool) (err error) {
 	}()
 
 	// Verify that the server is running on the expected network.
-	net, err := c.Client.GetCurrentNet()
+	net, err := c.GetCurrentNet()
 	if err != nil {
-		return errors.E(op, errors.E(errors.Op("hxd.jsonrpc.getcurrentnet"), err))
+		return err
 	}
 	if net != c.chainParams.Net {
-		return errors.E(op, "mismatched networks")
+		return errors.New("mismatched networks")
 	}
 
 	// Ensure the RPC server has a compatible API version.
 	var serverAPI semver
-	versions, err := c.Client.Version()
+	versions, err := c.Version()
 	if err == nil {
 		versionResult := versions["hxdjsonrpcapi"]
 		serverAPI = semver{
@@ -120,8 +126,9 @@ func (c *RPCClient) Start(ctx context.Context, retry bool) (err error) {
 		}
 	}
 	if !semverCompatible(requiredChainServerAPI, serverAPI) {
-		return errors.E(op, errors.Errorf("advertised API version %v incompatible"+
-			"with required verison %v", serverAPI, requiredChainServerAPI))
+		return fmt.Errorf("consensus JSON-RPC server does not have a "+
+			"compatible API version: advertises %v but require %v",
+			serverAPI, requiredChainServerAPI)
 	}
 
 	c.quitMtx.Lock()
@@ -164,78 +171,89 @@ func (c *RPCClient) WaitForShutdown() {
 // dcrrpcclient callbacks, which isn't very Go-like and doesn't allow
 // blocking client calls.
 type (
-	// blockConnected is a notification for a newly-attached block to the
+	// ClientConnected is a notification for when a client connection is
+	// opened or reestablished to the chain server.
+	ClientConnected struct{}
+
+	// BlockConnected is a notification for a newly-attached block to the
 	// best chain.
-	blockConnected struct {
-		blockHeader  []byte
-		transactions [][]byte
+	BlockConnected struct {
+		BlockHeader  []byte
+		Transactions [][]byte
 	}
 
-	// blockDisconnected is a notifcation that the block described by the header
-	// was reorganized out of the best chain.
-	blockDisconnected struct {
-		blockHeader []byte
+	// BlockDisconnected is a notifcation that the block described by the
+	// BlockStamp was reorganized out of the best chain.
+	BlockDisconnected struct {
+		BlockHeader []byte
 	}
 
-	// relevantTxAccepted is a notification that a transaction accepted by
+	// RelevantTxAccepted is a notification that a transaction accepted by
 	// mempool passed the client's transaction filter.
-	relevantTxAccepted struct {
-		transaction []byte
+	RelevantTxAccepted struct {
+		Transaction []byte
 	}
 
-	// reorganization is a notification that a reorg has happen with the new
+	// Reorganization is a notification that a reorg has happen with the new
 	// old and new tip included.
-	reorganization struct {
-		oldHash   *chainhash.Hash
-		oldHeight int64
-		newHash   *chainhash.Hash
-		newHeight int64
+	Reorganization struct {
+		OldHash   *chainhash.Hash
+		OldHeight int64
+		NewHash   *chainhash.Hash
+		NewHeight int64
 	}
 
-	// winningTickets is a notification with the winning tickets (and the
+	// WinningTickets is a notification with the winning tickets (and the
 	// block they are in.
-	winningTickets struct {
-		blockHash   *chainhash.Hash
-		blockHeight int64
-		tickets     []*chainhash.Hash
+	WinningTickets struct {
+		BlockHash   *chainhash.Hash
+		BlockHeight int64
+		Tickets     []*chainhash.Hash
 	}
 
-	// missedTickets is a notifcation for tickets that have been missed.
-	missedTickets struct {
-		blockHash   *chainhash.Hash
-		blockHeight int64
-		tickets     []*chainhash.Hash
+	// MissedTickets is a notifcation for tickets that have been missed.
+	MissedTickets struct {
+		BlockHash   *chainhash.Hash
+		BlockHeight int64
+		Tickets     []*chainhash.Hash
 	}
 
-	// stakeDifficulty is a notification for the current stake difficulty.
-	stakeDifficulty struct {
-		blockHash   *chainhash.Hash
-		blockHeight int64
-		stakeDiff   int64
+	// StakeDifficulty is a notification for the current stake difficulty.
+	StakeDifficulty struct {
+		BlockHash   *chainhash.Hash
+		BlockHeight int64
+		StakeDiff   int64
 	}
 )
 
-// notifications returns a channel of parsed notifications sent by the remote
-// coolsnady RPC server.  This channel must be continually read or the process
+// Notifications returns a channel of parsed notifications sent by the remote
+// decred RPC server.  This channel must be continually read or the process
 // may abort for running out memory, as unread notifications are queued for
 // later reads.
-func (c *RPCClient) notifications() <-chan interface{} {
+func (c *RPCClient) Notifications() <-chan interface{} {
 	return c.dequeueNotification
 }
 
-// notificationsVoting returns a channel of parsed voting notifications sent
+// NotificationsVoting returns a channel of parsed voting notifications sent
 // by the remote RPC server.  This channel must be continually read or the
 // process may abort for running out memory, as unread notifications are
 // queued for later reads.
-func (c *RPCClient) notificationsVoting() <-chan interface{} {
+func (c *RPCClient) NotificationsVoting() <-chan interface{} {
 	return c.dequeueVotingNotification
+}
+
+func (c *RPCClient) onClientConnect() {
+	select {
+	case c.enqueueNotification <- ClientConnected{}:
+	case <-c.quit:
+	}
 }
 
 func (c *RPCClient) onBlockConnected(header []byte, transactions [][]byte) {
 	select {
-	case c.enqueueNotification <- blockConnected{
-		blockHeader:  header,
-		transactions: transactions,
+	case c.enqueueNotification <- BlockConnected{
+		BlockHeader:  header,
+		Transactions: transactions,
 	}:
 	case <-c.quit:
 	}
@@ -243,8 +261,8 @@ func (c *RPCClient) onBlockConnected(header []byte, transactions [][]byte) {
 
 func (c *RPCClient) onBlockDisconnected(header []byte) {
 	select {
-	case c.enqueueNotification <- blockDisconnected{
-		blockHeader: header,
+	case c.enqueueNotification <- BlockDisconnected{
+		BlockHeader: header,
 	}:
 	case <-c.quit:
 	}
@@ -252,8 +270,8 @@ func (c *RPCClient) onBlockDisconnected(header []byte) {
 
 func (c *RPCClient) onRelevantTxAccepted(transaction []byte) {
 	select {
-	case c.enqueueNotification <- relevantTxAccepted{
-		transaction: transaction,
+	case c.enqueueNotification <- RelevantTxAccepted{
+		Transaction: transaction,
 	}:
 	case <-c.quit:
 	}
@@ -264,7 +282,7 @@ func (c *RPCClient) onRelevantTxAccepted(transaction []byte) {
 func (c *RPCClient) onReorganization(oldHash *chainhash.Hash, oldHeight int32,
 	newHash *chainhash.Hash, newHeight int32) {
 	select {
-	case c.enqueueNotification <- reorganization{
+	case c.enqueueNotification <- Reorganization{
 		oldHash,
 		int64(oldHeight),
 		newHash,
@@ -278,10 +296,10 @@ func (c *RPCClient) onReorganization(oldHash *chainhash.Hash, oldHeight int32,
 // downstream to the notifications queue.
 func (c *RPCClient) onWinningTickets(hash *chainhash.Hash, height int64, tickets []*chainhash.Hash) {
 	select {
-	case c.enqueueVotingNotification <- winningTickets{
-		blockHash:   hash,
-		blockHeight: height,
-		tickets:     tickets,
+	case c.enqueueVotingNotification <- WinningTickets{
+		BlockHash:   hash,
+		BlockHeight: height,
+		Tickets:     tickets,
 	}:
 	case <-c.quit:
 	}
@@ -290,25 +308,25 @@ func (c *RPCClient) onWinningTickets(hash *chainhash.Hash, height int64, tickets
 // onSpentAndMissedTickets handles missed tickets notifications data and passes
 // it downstream to the notifications queue.
 func (c *RPCClient) onSpentAndMissedTickets(blockHash *chainhash.Hash, height int64, sdiff int64, tickets map[chainhash.Hash]bool) {
-	var missed []*chainhash.Hash
+	var missedTickets []*chainhash.Hash
 
 	// Copy the missed ticket hashes to a slice.
 	for ticketHash, spent := range tickets {
 		if !spent {
 			ticketHash := ticketHash
-			missed = append(missed, &ticketHash)
+			missedTickets = append(missedTickets, &ticketHash)
 		}
 	}
 
-	if len(missed) == 0 {
+	if len(missedTickets) == 0 {
 		return
 	}
 
 	select {
-	case c.enqueueNotification <- missedTickets{
-		blockHash:   blockHash,
-		blockHeight: height,
-		tickets:     missed,
+	case c.enqueueNotification <- MissedTickets{
+		BlockHash:   blockHash,
+		BlockHeight: height,
+		Tickets:     missedTickets,
 	}:
 	case <-c.quit:
 	}
@@ -321,7 +339,7 @@ func (c *RPCClient) onStakeDifficulty(hash *chainhash.Hash,
 	stakeDiff int64) {
 
 	select {
-	case c.enqueueNotification <- stakeDifficulty{
+	case c.enqueueNotification <- StakeDifficulty{
 		hash,
 		height,
 		stakeDiff,
@@ -392,7 +410,7 @@ out:
 			//
 			// TODO: A minute timeout is used to prevent the handler loop from
 			// blocking here forever, but this is much larger than it needs to
-			// be due to hxd processing websocket requests synchronously (see
+			// be due to dcrd processing websocket requests synchronously (see
 			// https://github.com/btcsuite/btcd/issues/504).  Decrease this to
 			// something saner like 3s when the above issue is fixed.
 			type sessionResult struct {
@@ -485,9 +503,5 @@ out:
 func (c *RPCClient) POSTClient() (*dcrrpcclient.Client, error) {
 	configCopy := *c.connConfig
 	configCopy.HTTPPostMode = true
-	client, err := dcrrpcclient.New(&configCopy, nil)
-	if err != nil {
-		return nil, errors.E(errors.Op("chain.POSTClient"), err)
-	}
-	return client, nil
+	return dcrrpcclient.New(&configCopy, nil)
 }

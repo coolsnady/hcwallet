@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016 The coolsnady developers
+ * Copyright (c) 2015-2016 The decred developers
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,9 +17,10 @@
 package pgpwordlist
 
 import (
-	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var tests = []struct {
@@ -43,13 +44,8 @@ var tests = []struct {
 func TestDecode(t *testing.T) {
 	for _, test := range tests {
 		data, err := DecodeMnemonics(strings.Split(test.mnemonics, " "))
-		if err != nil {
-			t.Error(err)
-			continue
-		}
-		if !bytes.Equal(data, test.data) {
-			t.Errorf("decoded data %x differs from expected %x", data, test.data)
-		}
+		assert.NoError(t, err)
+		assert.Equal(t, test.data, data)
 	}
 }
 
@@ -58,9 +54,7 @@ func TestEncodeMnemonics(t *testing.T) {
 		mnemonicsSlice := strings.Split(test.mnemonics, " ")
 		for i, b := range test.data {
 			mnemonic := ByteToMnemonic(b, i)
-			if mnemonic != mnemonicsSlice[i] {
-				t.Errorf("returned mnemonic %s differs from expected %s", mnemonic, mnemonicsSlice[i])
-			}
+			assert.Equal(t, mnemonicsSlice[i], mnemonic)
 		}
 	}
 }

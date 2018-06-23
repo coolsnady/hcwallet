@@ -1,5 +1,5 @@
 // Copyright (c) 2015-2016 The btcsuite developers
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/coolsnady/hxd/dcrutil"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 )
 
 // AmountFlag embeds a dcrutil.Amount and implements the flags.Marshaler and
@@ -30,7 +30,7 @@ func (a *AmountFlag) MarshalFlag() (string, error) {
 
 // UnmarshalFlag satisifes the flags.Unmarshaler interface.
 func (a *AmountFlag) UnmarshalFlag(value string) error {
-	value = strings.TrimSuffix(value, " HXD")
+	value = strings.TrimSuffix(value, " DCR")
 	valueF64, err := strconv.ParseFloat(value, 64)
 	if err != nil {
 		return err

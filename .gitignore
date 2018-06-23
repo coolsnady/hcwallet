@@ -1,4 +1,5 @@
-hxwallet
+dcrwallet
 vendor
 *~
 .vscode
+glide.lock

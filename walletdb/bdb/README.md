@@ -26,15 +26,15 @@ if err != nil {
 
 ## Documentation
 
-[![GoDoc](https://godoc.org/github.com/coolsnady/hxwallet/wallet/internal/walletdb/bdb?status.png)](http://godoc.org/github.com/coolsnady/hxwallet/wallet/internal/walletdb/bdb)
+[![GoDoc](https://godoc.org/github.com/decred/dcrwallet/walletdb/bdb?status.png)](http://godoc.org/github.com/decred/dcrwallet/walletdb/bdb)
 
 Full `go doc` style documentation for the project can be viewed online without
 installing this package by using the GoDoc site here:
-http://godoc.org/github.com/coolsnady/hxwallet/wallet/internal/walletdb/bdb
+http://godoc.org/github.com/decred/dcrwallet/walletdb/bdb
 
 You can also view the documentation locally once the package is installed with
 the `godoc` tool by running `godoc -http=":6060"` and pointing your browser to
-http://localhost:6060/pkg/github.com/coolsnady/hxwallet/wallet/internal/walletdb/bdb
+http://localhost:6060/pkg/github.com/decred/dcrwallet/walletdb/bdb
 
 ## License
 

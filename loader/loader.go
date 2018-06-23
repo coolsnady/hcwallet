@@ -1,21 +1,22 @@
-// Copyright (c) 2015-2018 The btcsuite developers
+// Copyright (c) 2015-2017 The btcsuite developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 package loader
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 
 	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxd/dcrutil"
 	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
-	"github.com/coolsnady/hxwallet/errors"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxwallet/ticketbuyer"
 	"github.com/coolsnady/hxwallet/wallet"
-	_ "github.com/coolsnady/hxwallet/wallet/drivers/bdb" // driver loaded during init
+	"github.com/coolsnady/hxwallet/walletdb"
+	_ "github.com/coolsnady/hxwallet/walletdb/bdb" // driver loaded during init
 )
 
 const (
@@ -35,45 +36,46 @@ type Loader struct {
 	chainParams *chaincfg.Params
 	dbDirPath   string
 	wallet      *wallet.Wallet
-	db          wallet.DB
+	db          walletdb.DB
 	mu          sync.Mutex
 
 	purchaseManager *ticketbuyer.PurchaseManager
 	ntfnClient      wallet.MainTipChangedNotificationsClient
 	stakeOptions    *StakeOptions
-	gapLimit        int
+	addrIdxScanLen  int
 	allowHighFees   bool
 	relayFee        float64
 }
 
 // StakeOptions contains the various options necessary for stake mining.
 type StakeOptions struct {
-	VotingEnabled       bool
-	TicketFee           float64
-	AddressReuse        bool
-	VotingAddress       dcrutil.Address
-	PoolAddress         dcrutil.Address
-	PoolFees            float64
-	StakePoolColdExtKey string
+	TicketPurchasingEnabled bool
+	VotingEnabled           bool
+	TicketFee               float64
+	AddressReuse            bool
+	TicketAddress           dcrutil.Address
+	PoolAddress             dcrutil.Address
+	PoolFees                float64
+	StakePoolColdExtKey     string
 }
 
 // NewLoader constructs a Loader.
-func NewLoader(chainParams *chaincfg.Params, dbDirPath string, stakeOptions *StakeOptions, gapLimit int,
+func NewLoader(chainParams *chaincfg.Params, dbDirPath string, stakeOptions *StakeOptions, addrIdxScanLen int,
 	allowHighFees bool, relayFee float64) *Loader {
 
 	return &Loader{
-		chainParams:   chainParams,
-		dbDirPath:     dbDirPath,
-		stakeOptions:  stakeOptions,
-		gapLimit:      gapLimit,
-		allowHighFees: allowHighFees,
-		relayFee:      relayFee,
+		chainParams:    chainParams,
+		dbDirPath:      dbDirPath,
+		stakeOptions:   stakeOptions,
+		addrIdxScanLen: addrIdxScanLen,
+		allowHighFees:  allowHighFees,
+		relayFee:       relayFee,
 	}
 }
 
 // onLoaded executes each added callback and prevents loader from loading any
 // additional wallets.  Requires mutex to be locked.
-func (l *Loader) onLoaded(w *wallet.Wallet, db wallet.DB) {
+func (l *Loader) onLoaded(w *wallet.Wallet, db walletdb.DB) {
 	for _, fn := range l.callbacks {
 		fn(w)
 	}
@@ -98,106 +100,15 @@ func (l *Loader) RunAfterLoad(fn func(*wallet.Wallet)) {
 	}
 }
 
-// CreateWatchingOnlyWallet creates a new watch-only wallet using the provided
-// extended public key and public passphrase.
-func (l *Loader) CreateWatchingOnlyWallet(extendedPubKey string, pubPass []byte) (w *wallet.Wallet, err error) {
-	const op errors.Op = "loader.CreateWatchingOnlyWallet"
-
-	defer l.mu.Unlock()
-	l.mu.Lock()
-
-	if l.wallet != nil {
-		return nil, errors.E(op, errors.Exist, "wallet already loaded")
-	}
-
-	// Ensure that the network directory exists.
-	if fi, err := os.Stat(l.dbDirPath); err != nil {
-		if os.IsNotExist(err) {
-			// Attempt data directory creation
-			if err = os.MkdirAll(l.dbDirPath, 0700); err != nil {
-				return nil, errors.E(op, err)
-			}
-		} else {
-			return nil, errors.E(op, err)
-		}
-	} else {
-		if !fi.IsDir() {
-			return nil, errors.E(op, errors.Invalid, errors.Errorf("%q is not a directory", l.dbDirPath))
-		}
-	}
-
-	dbPath := filepath.Join(l.dbDirPath, walletDbName)
-	exists, err := fileExists(dbPath)
-	if err != nil {
-		return nil, errors.E(op, err)
-	}
-	if exists {
-		return nil, errors.E(op, errors.Exist, "wallet already exists")
-	}
-
-	// At this point it is asserted that there is no existing database file, and
-	// deleting anything won't destroy a wallet in use.  Defer a function that
-	// attempts to remove any written database file if this function errors.
-	defer func() {
-		if err != nil {
-			_ = os.Remove(dbPath)
-		}
-	}()
-
-	// Create the wallet database backed by bolt db.
-	err = os.MkdirAll(l.dbDirPath, 0700)
-	if err != nil {
-		return nil, errors.E(op, err)
-	}
-	db, err := wallet.CreateDB("bdb", dbPath)
-	if err != nil {
-		return nil, errors.E(op, err)
-	}
-
-	// Initialize the watch-only database for the wallet before opening.
-	err = wallet.CreateWatchOnly(db, extendedPubKey, pubPass, l.chainParams)
-	if err != nil {
-		return nil, errors.E(op, err)
-	}
-
-	// Open the watch-only wallet.
-	so := l.stakeOptions
-	cfg := &wallet.Config{
-		DB:                  db,
-		PubPassphrase:       pubPass,
-		VotingEnabled:       so.VotingEnabled,
-		AddressReuse:        so.AddressReuse,
-		VotingAddress:       so.VotingAddress,
-		PoolAddress:         so.PoolAddress,
-		PoolFees:            so.PoolFees,
-		TicketFee:           so.TicketFee,
-		GapLimit:            l.gapLimit,
-		StakePoolColdExtKey: so.StakePoolColdExtKey,
-		AllowHighFees:       l.allowHighFees,
-		RelayFee:            l.relayFee,
-		Params:              l.chainParams,
-	}
-	w, err = wallet.Open(cfg)
-	if err != nil {
-		return nil, errors.E(op, err)
-	}
-	w.Start()
-
-	l.onLoaded(w, db)
-	return w, nil
-}
-
 // CreateNewWallet creates a new wallet using the provided public and private
 // passphrases.  The seed is optional.  If non-nil, addresses are derived from
 // this seed.  If nil, a secure random seed is generated.
 func (l *Loader) CreateNewWallet(pubPassphrase, privPassphrase, seed []byte) (w *wallet.Wallet, err error) {
-	const op errors.Op = "loader.CreateNewWallet"
-
 	defer l.mu.Unlock()
 	l.mu.Lock()
 
 	if l.wallet != nil {
-		return nil, errors.E(op, errors.Exist, "wallet already opened")
+		return nil, ErrWalletLoaded
 	}
 
 	// Ensure that the network directory exists.
@@ -205,24 +116,24 @@ func (l *Loader) CreateNewWallet(pubPassphrase, privPassphrase, seed []byte) (w 
 		if os.IsNotExist(err) {
 			// Attempt data directory creation
 			if err = os.MkdirAll(l.dbDirPath, 0700); err != nil {
-				return nil, errors.E(op, err)
+				return nil, fmt.Errorf("cannot create directory: %s", err)
 			}
 		} else {
-			return nil, errors.E(op, err)
+			return nil, fmt.Errorf("error checking directory: %s", err)
 		}
 	} else {
 		if !fi.IsDir() {
-			return nil, errors.E(op, errors.Errorf("%q is not a directory", l.dbDirPath))
+			return nil, fmt.Errorf("path '%s' is not a directory", l.dbDirPath)
 		}
 	}
 
 	dbPath := filepath.Join(l.dbDirPath, walletDbName)
 	exists, err := fileExists(dbPath)
 	if err != nil {
-		return nil, errors.E(op, err)
+		return nil, err
 	}
 	if exists {
-		return nil, errors.E(op, errors.Exist, "wallet DB exists")
+		return nil, ErrWalletExists
 	}
 
 	// At this point it is asserted that there is no existing database file, and
@@ -237,39 +148,27 @@ func (l *Loader) CreateNewWallet(pubPassphrase, privPassphrase, seed []byte) (w 
 	// Create the wallet database backed by bolt db.
 	err = os.MkdirAll(l.dbDirPath, 0700)
 	if err != nil {
-		return nil, errors.E(op, err)
+		return nil, err
 	}
-	db, err := wallet.CreateDB("bdb", dbPath)
+	db, err := walletdb.Create("bdb", dbPath)
 	if err != nil {
-		return nil, errors.E(op, err)
+		return nil, err
 	}
 
 	// Initialize the newly created database for the wallet before opening.
 	err = wallet.Create(db, pubPassphrase, privPassphrase, seed, l.chainParams)
 	if err != nil {
-		return nil, errors.E(op, err)
+		return nil, err
 	}
 
 	// Open the newly-created wallet.
 	so := l.stakeOptions
-	cfg := &wallet.Config{
-		DB:                  db,
-		PubPassphrase:       pubPassphrase,
-		VotingEnabled:       so.VotingEnabled,
-		AddressReuse:        so.AddressReuse,
-		VotingAddress:       so.VotingAddress,
-		PoolAddress:         so.PoolAddress,
-		PoolFees:            so.PoolFees,
-		TicketFee:           so.TicketFee,
-		GapLimit:            l.gapLimit,
-		StakePoolColdExtKey: so.StakePoolColdExtKey,
-		AllowHighFees:       l.allowHighFees,
-		RelayFee:            l.relayFee,
-		Params:              l.chainParams,
-	}
-	w, err = wallet.Open(cfg)
+	w, err = wallet.Open(db, pubPassphrase, privPassphrase, so.VotingEnabled, so.AddressReuse,
+		so.TicketAddress, so.PoolAddress, so.PoolFees, so.TicketFee,
+		l.addrIdxScanLen, so.StakePoolColdExtKey, l.allowHighFees,
+		l.relayFee, l.chainParams)
 	if err != nil {
-		return nil, errors.E(op, err)
+		return nil, err
 	}
 	w.Start()
 
@@ -281,22 +180,20 @@ func (l *Loader) CreateNewWallet(pubPassphrase, privPassphrase, seed []byte) (w 
 // and the public passphrase.  If the loader is being called by a context where
 // standard input prompts may be used during wallet upgrades, setting
 // canConsolePrompt will enable these prompts.
-func (l *Loader) OpenExistingWallet(pubPassphrase []byte) (w *wallet.Wallet, rerr error) {
-	const op errors.Op = "loader.OpenExistingWallet"
-
+func (l *Loader) OpenExistingWallet(pubPassphrase []byte, privPassphrase []byte) (w *wallet.Wallet, rerr error) {
 	defer l.mu.Unlock()
 	l.mu.Lock()
 
 	if l.wallet != nil {
-		return nil, errors.E(op, errors.Exist, "wallet already opened")
+		return nil, ErrWalletLoaded
 	}
 
 	// Open the database using the boltdb backend.
 	dbPath := filepath.Join(l.dbDirPath, walletDbName)
-	db, err := wallet.OpenDB("bdb", dbPath)
+	db, err := walletdb.Open("bdb", dbPath)
 	if err != nil {
 		log.Errorf("Failed to open database: %v", err)
-		return nil, errors.E(op, err)
+		return nil, err
 	}
 	// If this function does not return to completion the database must be
 	// closed.  Otherwise, because the database is locked on opens, any
@@ -309,24 +206,12 @@ func (l *Loader) OpenExistingWallet(pubPassphrase []byte) (w *wallet.Wallet, rer
 	}()
 
 	so := l.stakeOptions
-	cfg := &wallet.Config{
-		DB:                  db,
-		PubPassphrase:       pubPassphrase,
-		VotingEnabled:       so.VotingEnabled,
-		AddressReuse:        so.AddressReuse,
-		VotingAddress:       so.VotingAddress,
-		PoolAddress:         so.PoolAddress,
-		PoolFees:            so.PoolFees,
-		TicketFee:           so.TicketFee,
-		GapLimit:            l.gapLimit,
-		StakePoolColdExtKey: so.StakePoolColdExtKey,
-		AllowHighFees:       l.allowHighFees,
-		RelayFee:            l.relayFee,
-		Params:              l.chainParams,
-	}
-	w, err = wallet.Open(cfg)
+	w, err = wallet.Open(db, pubPassphrase, privPassphrase, so.VotingEnabled, so.AddressReuse,
+		so.TicketAddress, so.PoolAddress, so.PoolFees, so.TicketFee,
+		l.addrIdxScanLen, so.StakePoolColdExtKey, l.allowHighFees,
+		l.relayFee, l.chainParams)
 	if err != nil {
-		return nil, errors.E(op, err)
+		return nil, err
 	}
 
 	w.Start()
@@ -337,13 +222,8 @@ func (l *Loader) OpenExistingWallet(pubPassphrase []byte) (w *wallet.Wallet, rer
 // WalletExists returns whether a file exists at the loader's database path.
 // This may return an error for unexpected I/O failures.
 func (l *Loader) WalletExists() (bool, error) {
-	const op errors.Op = "loader.WalletExists"
 	dbPath := filepath.Join(l.dbDirPath, walletDbName)
-	exists, err := fileExists(dbPath)
-	if err != nil {
-		return false, errors.E(op, err)
-	}
-	return exists, nil
+	return fileExists(dbPath)
 }
 
 // LoadedWallet returns the loaded wallet, if any, and a bool for whether the
@@ -356,27 +236,26 @@ func (l *Loader) LoadedWallet() (*wallet.Wallet, bool) {
 	return w, w != nil
 }
 
-// UnloadWallet stops the loaded wallet, if any, and closes the wallet database.
-// Returns with errors.Invalid if the wallet has not been loaded with
-// CreateNewWallet or LoadExistingWallet.  The Loader may be reused if this
-// function returns without error.
+// UnloadWallet stops the loaded wallet, if any, and closes the wallet
+// database.  This returns ErrWalletNotLoaded if the wallet has not been loaded
+// with CreateNewWallet or LoadExistingWallet.  The Loader may be reused if
+// this function returns without error.
 func (l *Loader) UnloadWallet() error {
-	const op errors.Op = "errors.UnloadWallet"
-
 	defer l.mu.Unlock()
 	l.mu.Lock()
 
 	if l.wallet == nil {
-		return errors.E(op, errors.Invalid, "wallet is unopened")
+		return ErrWalletNotLoaded
 	}
 
+	// Ignore err already stopped.
 	l.stopTicketPurchase()
 
 	l.wallet.Stop()
 	l.wallet.WaitForShutdown()
 	err := l.db.Close()
 	if err != nil {
-		return errors.E(op, err)
+		return err
 	}
 
 	l.wallet = nil
@@ -393,61 +272,58 @@ func (l *Loader) SetChainClient(chainClient *dcrrpcclient.Client) {
 
 // StartTicketPurchase launches the ticketbuyer to start purchasing tickets.
 func (l *Loader) StartTicketPurchase(passphrase []byte, ticketbuyerCfg *ticketbuyer.Config) error {
-	const op errors.Op = "loader.StartTicketPurchase"
-
 	defer l.mu.Unlock()
 	l.mu.Lock()
 
 	// Already running?
 	if l.purchaseManager != nil {
-		return errors.E(op, errors.Invalid, "ticket purchaser already started")
+		return ErrTicketBuyerStarted
 	}
 
 	if l.wallet == nil {
-		return errors.E(op, errors.Invalid, "wallet must be loaded")
+		return ErrWalletNotLoaded
 	}
 
 	if l.chainClient == nil {
-		return errors.E(op, errors.Invalid, "hxd RPC client must be loaded")
+		return ErrNoChainClient
 	}
 
 	w := l.wallet
 	p, err := ticketbuyer.NewTicketPurchaser(ticketbuyerCfg, l.chainClient, w, l.chainParams)
 	if err != nil {
-		return errors.E(op, err)
+		return err
 	}
 	n := w.NtfnServer.MainTipChangedNotifications()
 	pm := ticketbuyer.NewPurchaseManager(w, p, n.C, passphrase)
 	l.ntfnClient = n
 	l.purchaseManager = pm
 	pm.Start()
+	l.wallet.SetTicketPurchasingEnabled(true)
 	return nil
 }
 
 // stopTicketPurchase stops the ticket purchaser, waiting until it has finished.
-// Returns false if the ticket purchaser was not running. It must be called with
-// the mutex lock held.
-func (l *Loader) stopTicketPurchase() bool {
+// It must be called with the mutex lock held.
+func (l *Loader) stopTicketPurchase() error {
 	if l.purchaseManager == nil {
-		return false
+		return ErrTicketBuyerStopped
 	}
 
 	l.ntfnClient.Done()
 	l.purchaseManager.Stop()
 	l.purchaseManager.WaitForShutdown()
 	l.purchaseManager = nil
-	return true
+	l.wallet.SetTicketPurchasingEnabled(false)
+	return nil
 }
 
 // StopTicketPurchase stops the ticket purchaser, waiting until it has finished.
+// If no ticket purchaser is running, it returns ErrTicketBuyerStopped.
 func (l *Loader) StopTicketPurchase() error {
-	const op errors.Op = "loader.StopTicketPurchase"
 	defer l.mu.Unlock()
 	l.mu.Lock()
-	if !l.stopTicketPurchase() {
-		return errors.E(op, errors.Invalid, "ticket purchaser is not running")
-	}
-	return nil
+
+	return l.stopTicketPurchase()
 }
 
 // PurchaseManager returns the ticket purchaser instance. If ticket purchasing

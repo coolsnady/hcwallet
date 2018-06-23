@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The coolsnady developers
+// Copyright (c) 2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -15,10 +15,10 @@ import (
 	"os"
 
 	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/dcrutil/hdkeychain"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
-	_ "github.com/coolsnady/hxwallet/wallet/internal/walletdb/bdb"
+	"github.com/coolsnady/hxd/hdkeychain"
 	"github.com/coolsnady/hxwallet/wallet/udb"
+	"github.com/coolsnady/hxwallet/walletdb"
+	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
 	"github.com/coolsnady/hxwallet/walletseed"
 )
 

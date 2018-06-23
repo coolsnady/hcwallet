@@ -1,5 +1,5 @@
 // Copyright (c) 2015-2016 The btcsuite developers
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 //
 // Permission to use, copy, modify, and distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above
@@ -25,7 +25,7 @@ import (
 
 func serverMethods() map[string]struct{} {
 	m := make(map[string]struct{})
-	for method, handlerData := range handlers {
+	for method, handlerData := range rpcHandlers {
 		if !handlerData.noHelp {
 			m[method] = struct{}{}
 		}

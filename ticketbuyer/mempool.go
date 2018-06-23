@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/coolsnady/hxd/dcrjson"
-	"github.com/coolsnady/hxd/dcrutil"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxwallet/wallet"
 )
 
@@ -19,9 +19,9 @@ import (
 func (t *TicketPurchaser) ownTicketsInMempool() (int, error) {
 	tickets := 0
 
-	// Voting address is specified and may not belong to our own
+	// Ticket address is specified and may not belong to our own
 	// wallet. Search the mempool directly for the number of tickets.
-	if t.votingAddress != nil {
+	if t.ticketAddress != nil {
 		tiHashes, err := t.dcrdChainSvr.GetRawMempool(dcrjson.GRMTickets)
 		if err != nil {
 			return 0, err
@@ -42,7 +42,7 @@ func (t *TicketPurchaser) ownTicketsInMempool() (int, error) {
 				return 0, err
 			}
 			if bytes.Equal(addr.ScriptAddress(),
-				t.votingAddress.ScriptAddress()) {
+				t.ticketAddress.ScriptAddress()) {
 				tickets++
 			}
 		}

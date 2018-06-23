@@ -1,17 +1,17 @@
 // Copyright (c) 2014 The btcsuite developers
-// Copyright (c) 2015 The coolsnady developers
+// Copyright (c) 2015 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 package walletdb_test
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
-	"github.com/coolsnady/hxwallet/errors"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
-	_ "github.com/coolsnady/hxwallet/wallet/internal/walletdb/bdb"
+	"github.com/coolsnady/hxwallet/walletdb"
+	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
 )
 
 // TestAddDuplicateDriver ensures that adding a duplicate driver does not
@@ -29,7 +29,7 @@ func TestAddDuplicateDriver(t *testing.T) {
 	// detected if the interface allows a duplicate driver to overwrite an
 	// existing one.
 	bogusCreateDB := func(args ...interface{}) (walletdb.DB, error) {
-		return nil, errors.Errorf("duplicate driver allowed for database "+
+		return nil, fmt.Errorf("duplicate driver allowed for database "+
 			"type [%v]", dbType)
 	}
 
@@ -42,8 +42,9 @@ func TestAddDuplicateDriver(t *testing.T) {
 		Open:   bogusCreateDB,
 	}
 	err := walletdb.RegisterDriver(driver)
-	if !errors.Is(errors.Exist, err) {
-		t.Errorf("unexpected duplicate driver registration error: %v", err)
+	if err != walletdb.ErrDbTypeRegistered {
+		t.Errorf("unexpected duplicate driver registration error - "+
+			"got %v, want %v", err, walletdb.ErrDbTypeRegistered)
 	}
 
 	dbPath := "dupdrivertest.db"
@@ -64,7 +65,7 @@ func TestCreateOpenFail(t *testing.T) {
 	// driver function that intentionally returns a failure which can be
 	// detected.
 	dbType := "createopenfail"
-	openError := errors.Errorf("failed to create or open database for "+
+	openError := fmt.Errorf("failed to create or open database for "+
 		"database type [%v]", dbType)
 	bogusCreateDB := func(args ...interface{}) (walletdb.DB, error) {
 		return nil, openError
@@ -105,14 +106,18 @@ func TestCreateOpenUnsupported(t *testing.T) {
 	// expected error.
 	dbType := "unsupported"
 	_, err := walletdb.Create(dbType)
-	if !errors.Is(errors.Invalid, err) {
-		t.Errorf("walletdb.Create: %v", err)
+	if err != walletdb.ErrDbUnknownType {
+		t.Errorf("expected error not received - got: %v, want %v", err,
+			walletdb.ErrDbUnknownType)
+		return
 	}
 
 	// Ensure opening a database with the an unsupported type fails with the
 	// expected error.
 	_, err = walletdb.Open(dbType)
-	if !errors.Is(errors.Invalid, err) {
-		t.Errorf("walletdb.Create: %v", err)
+	if err != walletdb.ErrDbUnknownType {
+		t.Errorf("expected error not received - got: %v, want %v", err,
+			walletdb.ErrDbUnknownType)
+		return
 	}
 }

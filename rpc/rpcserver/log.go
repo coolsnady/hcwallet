@@ -1,5 +1,4 @@
 // Copyright (c) 2015-2016 The btcsuite developers
-// Copyright (c) 2018 The coolsnady devlopers
 //
 // Permission to use, copy, modify, and distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above
@@ -19,8 +18,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/decred/slog"
 	"google.golang.org/grpc/grpclog"
+
+	"github.com/decred/slog"
 )
 
 // UseLogger sets the logger to use for the gRPC server.

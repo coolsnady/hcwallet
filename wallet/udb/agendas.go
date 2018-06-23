@@ -1,12 +1,12 @@
-// Copyright (c) 2017-2018 The coolsnady developers
+// Copyright (c) 2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 package udb
 
 import (
-	"github.com/coolsnady/hxwallet/errors"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
+	"github.com/coolsnady/hxwallet/apperrors"
+	"github.com/coolsnady/hxwallet/walletdb"
 )
 
 type agendaPreferencesTy struct {
@@ -41,7 +41,8 @@ func (t agendaPreferencesTy) preference(tx walletdb.ReadTx, version uint32, agen
 func SetAgendaPreference(tx walletdb.ReadWriteTx, version uint32, agendaID, choiceID string) error {
 	err := agendaPreferences.setPreference(tx, version, agendaID, choiceID)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		const str = "failed to put agenda preference"
+		return apperrors.E{ErrorCode: apperrors.ErrDatabase, Description: str, Err: err}
 	}
 	return nil
 }

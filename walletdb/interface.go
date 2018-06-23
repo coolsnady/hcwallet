@@ -1,5 +1,5 @@
 // Copyright (c) 2014 The btcsuite developers
-// Copyright (c) 2015 The coolsnady developers
+// Copyright (c) 2015 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -8,11 +8,7 @@
 
 package walletdb
 
-import (
-	"io"
-
-	"github.com/coolsnady/hxwallet/errors"
-)
+import "io"
 
 // ReadTx represents a database transaction that can only be used for reads.  If
 // a database update must occur, use a ReadWriteTx.
@@ -36,7 +32,7 @@ type ReadWriteTx interface {
 	ReadWriteBucket(key []byte) ReadWriteBucket
 
 	// CreateTopLevelBucket creates the top level bucket for a key if it
-	// does not exist.  The newly-created bucket is returned.
+	// does not exist.  The newly-created bucket it returned.
 	CreateTopLevelBucket(key []byte) (ReadWriteBucket, error)
 
 	// DeleteTopLevelBucket deletes the top level bucket for a key.  This
@@ -90,29 +86,35 @@ type ReadWriteBucket interface {
 	// Returns nil if the bucket does not exist.
 	NestedReadWriteBucket(key []byte) ReadWriteBucket
 
-	// CreateBucket creates and returns a new nested bucket with the given key.
-	// Errors with code Exist if the bucket already exists and Invalid if the
-	// key is empty or otherwise invalid for the driver.
+	// CreateBucket creates and returns a new nested bucket with the given
+	// key.  Returns ErrBucketExists if the bucket already exists,
+	// ErrBucketNameRequired if the key is empty, or ErrIncompatibleValue
+	// if the key value is otherwise invalid for the particular database
+	// implementation.  Other errors are possible depending on the
+	// implementation.
 	CreateBucket(key []byte) (ReadWriteBucket, error)
 
-	// CreateBucketIfNotExists creates and returns a new nested bucket with the
-	// given key if it does not already exist.  Errors with code Invalid if the
-	// key is empty or the key/value is not valid for the driver.
+	// CreateBucketIfNotExists creates and returns a new nested bucket with
+	// the given key if it does not already exist.  Returns
+	// ErrBucketNameRequired if the key is empty or ErrIncompatibleValue
+	// if the key value is otherwise invalid for the particular database
+	// backend.  Other errors are possible depending on the implementation.
 	CreateBucketIfNotExists(key []byte) (ReadWriteBucket, error)
 
-	// DeleteNestedBucket removes a nested bucket with the given key. Errors
-	// with code Invalid if attempted against a read-only transaction and
-	// NotExist if the specified bucket does not exist.
+	// DeleteNestedBucket removes a nested bucket with the given key.
+	// Returns ErrTxNotWritable if attempted against a read-only transaction
+	// and ErrBucketNotFound if the specified bucket does not exist.
 	DeleteNestedBucket(key []byte) error
 
-	// Put saves the specified key/value pair to the bucket.  Keys that do not
-	// already exist are added and keys that already exist are overwritten.
-	// Errors with code Invalid if attempted against a read-only transaction.
+	// Put saves the specified key/value pair to the bucket.  Keys that do
+	// not already exist are added and keys that already exist are
+	// overwritten.  Returns ErrTxNotWritable if attempted against a
+	// read-only transaction.
 	Put(key, value []byte) error
 
-	// Delete removes the specified key from the bucket.  Deleting a key that
-	// does not exist does not return an error.  Errors with code Invalid if
-	// attempted against a read-only transaction.
+	// Delete removes the specified key from the bucket.  Deleting a key
+	// that does not exist does not return an error.  Returns
+	// ErrTxNotWritable if attempted against a read-only transaction.
 	Delete(key []byte) error
 
 	// Cursor returns a new cursor, allowing for iteration over the bucket's
@@ -154,8 +156,8 @@ type ReadWriteCursor interface {
 	ReadCursor
 
 	// Delete removes the current key/value pair the cursor is at without
-	// invalidating the cursor.  Errors with code Invalid if attempted when the
-	// cursor points to a nested bucket.
+	// invalidating the cursor.  Returns ErrIncompatibleValue if attempted
+	// when the cursor points to a nested bucket.
 	Delete() error
 }
 
@@ -184,53 +186,44 @@ type DB interface {
 }
 
 // View opens a database read transaction and executes the function f with the
-// transaction passed as a parameter.  After f exits or panics, the transaction
-// is rolled back.  If f errors, its error is returned, not a rollback error (if
-// any occured).
+// transaction passed as a parameter.  After f exits, the transaction is rolled
+// back.  If f errors, its error is returned, not a rollback error (if any
+// occur).
 func View(db DB, f func(tx ReadTx) error) error {
 	tx, err := db.BeginReadTx()
 	if err != nil {
 		return err
 	}
-
-	// Rollback the transaction after f returns or panics.  Do not recover from
-	// any panic to keep the original stack trace intact.
-	defer func() {
-		rollbackErr := tx.Rollback()
-		if err != nil {
-			err = rollbackErr
-		}
-	}()
-
-	return f(tx)
+	err = f(tx)
+	rollbackErr := tx.Rollback()
+	if err != nil {
+		return err
+	}
+	if rollbackErr != nil {
+		return rollbackErr
+	}
+	return nil
 }
 
 // Update opens a database read/write transaction and executes the function f
 // with the transaction passed as a parameter.  After f exits, if f did not
-// error, the transaction is committed.  Otherwise, if f did error or panic, the
-// transaction is rolled back.  If a rollback fails, the original error returned
-// by f is still returned.  If the commit fails, the commit error is returned.
-func Update(db DB, f func(tx ReadWriteTx) error) (err error) {
+// error, the transaction is committed.  Otherwise, if f did error, the
+// transaction is rolled back.  If the rollback fails, the original error
+// returned by f is still returned.  If the commit fails, the commit error is
+// returned.
+func Update(db DB, f func(tx ReadWriteTx) error) error {
 	tx, err := db.BeginReadWriteTx()
 	if err != nil {
 		return err
 	}
-
-	// Commit or rollback the transaction after f returns or panics.  Do not
-	// recover from the panic to keep the original stack trace intact.
-	panicked := true
-	defer func() {
-		if panicked || err != nil {
-			tx.Rollback()
-			return
-		}
-
-		err = tx.Commit()
-	}()
-
 	err = f(tx)
-	panicked = false
-	return err
+	if err != nil {
+		// Want to return the original error, not a rollback error if
+		// any occur.
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 // Driver defines a structure for backend drivers to use when they registered
@@ -241,11 +234,13 @@ type Driver struct {
 	DbType string
 
 	// Create is the function that will be invoked with all user-specified
-	// arguments to create the database.
+	// arguments to create the database.  This function must return
+	// ErrDbExists if the database already exists.
 	Create func(args ...interface{}) (DB, error)
 
 	// Open is the function that will be invoked with all user-specified
-	// arguments to open the database.
+	// arguments to open the database.  This function must return
+	// ErrDbDoesNotExist if the database has not already been created.
 	Open func(args ...interface{}) (DB, error)
 }
 
@@ -253,12 +248,11 @@ type Driver struct {
 var drivers = make(map[string]*Driver)
 
 // RegisterDriver adds a backend database driver to available interfaces.
-// Errors if the  will be returned if the database type for the driver has
+// ErrDbTypeRegistered will be retruned if the database type for the driver has
 // already been registered.
 func RegisterDriver(driver Driver) error {
-	const op errors.Op = "walletdb.RegisterDriver"
 	if _, exists := drivers[driver.DbType]; exists {
-		return errors.E(op, errors.Exist, errors.Errorf("driver %q is already registered", driver.DbType))
+		return ErrDbTypeRegistered
 	}
 
 	drivers[driver.DbType] = &driver
@@ -278,11 +272,12 @@ func SupportedDrivers() []string {
 // Create intializes and opens a database for the specified type.  The arguments
 // are specific to the database type driver.  See the documentation for the
 // database driver for further details.
+//
+// ErrDbUnknownType will be returned if the the database type is not registered.
 func Create(dbType string, args ...interface{}) (DB, error) {
-	const op errors.Op = "walletdb.Create"
 	drv, exists := drivers[dbType]
 	if !exists {
-		return nil, errors.E(op, errors.Invalid, errors.Errorf("driver %q is not registered", dbType))
+		return nil, ErrDbUnknownType
 	}
 
 	return drv.Create(args...)
@@ -291,11 +286,12 @@ func Create(dbType string, args ...interface{}) (DB, error) {
 // Open opens an existing database for the specified type.  The arguments are
 // specific to the database type driver.  See the documentation for the database
 // driver for further details.
+//
+// ErrDbUnknownType will be returned if the the database type is not registered.
 func Open(dbType string, args ...interface{}) (DB, error) {
-	const op errors.Op = "walletdb.Open"
 	drv, exists := drivers[dbType]
 	if !exists {
-		return nil, errors.E(op, errors.Invalid, errors.Errorf("driver %q is not registered", dbType))
+		return nil, ErrDbUnknownType
 	}
 
 	return drv.Open(args...)

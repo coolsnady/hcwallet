@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 The coolsnady developers
+// Copyright (c) 2016-2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -9,16 +9,15 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"testing"
 	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/coolsnady/hxd/chaincfg"
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxd/wire"
-	_ "github.com/coolsnady/hxwallet/wallet/drivers/bdb"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	"github.com/coolsnady/hxwallet/walletdb"
+	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
 )
 
 func setup() (db walletdb.DB, s *Store, teardown func(), err error) {
@@ -71,23 +70,6 @@ func setupBoltDB() (db *bolt.DB, teardown func(), err error) {
 		os.Remove(f.Name())
 	}
 	db, err = bolt.Open(f.Name(), 0600, nil)
-	return
-}
-
-func tempDB(t *testing.T) (db walletdb.DB, teardown func()) {
-	f, err := ioutil.TempFile("", "udb")
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-	db, err = walletdb.Create("bdb", f.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	teardown = func() {
-		db.Close()
-		os.Remove(f.Name())
-	}
 	return
 }
 

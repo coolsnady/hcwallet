@@ -238,17 +238,17 @@ func PublicPass(reader *bufio.Reader, privPass []byte,
 // yes, a the user is prompted for it.  All prompts are repeated until the user
 // enters a valid response. The bool returned indicates if the wallet was
 // restored from a given seed or not.
-func Seed(reader *bufio.Reader) (seed []byte, imported bool, err error) {
+func Seed(reader *bufio.Reader) ([]byte, error) {
 	// Ascertain the wallet generation seed.
 	useUserSeed, err := promptListBool(reader, "Do you have an "+
 		"existing wallet seed you want to use?", "no")
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	if !useUserSeed {
 		seed, err := hdkeychain.GenerateSeed(hdkeychain.RecommendedSeedLen)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 
 		seedStrSplit := walletseed.EncodeMnemonicSlice(seed)
@@ -275,7 +275,7 @@ func Seed(reader *bufio.Reader) (seed []byte, imported bool, err error) {
 				`and secure location, enter "OK" to continue: `)
 			confirmSeed, err := reader.ReadString('\n')
 			if err != nil {
-				return nil, false, err
+				return nil, err
 			}
 			confirmSeed = strings.TrimSpace(confirmSeed)
 			confirmSeed = strings.Trim(confirmSeed, `"`)
@@ -284,7 +284,7 @@ func Seed(reader *bufio.Reader) (seed []byte, imported bool, err error) {
 			}
 		}
 
-		return seed, false, nil
+		return seed, nil
 	}
 
 	for {
@@ -334,7 +334,7 @@ func Seed(reader *bufio.Reader) (seed []byte, imported bool, err error) {
 
 		fmt.Printf("\nSeed input successful. \nHex: %x\n", seed)
 
-		return seed, true, nil
+		return seed, nil
 	}
 }
 
@@ -352,17 +352,22 @@ func Seed(reader *bufio.Reader) (seed []byte, imported bool, err error) {
 // previously specified in a configuration file.  The user will be given the
 // option of using this passphrase if public data encryption is enabled,
 // otherwise a user-specified passphrase will be prompted for.
-func Setup(r *bufio.Reader, insecurePubPass, configPubPass []byte) (privPass, pubPass, seed []byte, imported bool, err error) {
-	// coolsnady: no legacy keystore restore is needed (first coolsnady wallet
+func Setup(r *bufio.Reader, insecurePubPass, walletPass, configPubPass []byte) (privPass, pubPass, seed []byte, err error) {
+	// Decred: no legacy keystore restore is needed (first decred wallet
 	// version did not use the legacy keystore from earlier versions of
 	// btcwallet).
 
 	// Start by prompting for the private passphrase.  When there is an
 	// existing keystore, the user will be promped for that passphrase,
 	// otherwise they will be prompted for a new one.
-	privPass, err = PrivatePass(r)
-	if err != nil {
-		return
+
+	if bytes.Equal(walletPass, []byte("")) {
+		privPass, err = PrivatePass(r)
+		if err != nil {
+			return
+		}
+	} else {
+		privPass = walletPass
 	}
 
 	// Ascertain the public passphrase.  This will either be a value
@@ -376,7 +381,7 @@ func Setup(r *bufio.Reader, insecurePubPass, configPubPass []byte) (privPass, pu
 	// Ascertain the wallet generation seed.  This will either be an
 	// automatically generated value the user has already confirmed or a
 	// value the user has entered which has already been validated.
-	seed, imported, err = Seed(r)
+	seed, err = Seed(r)
 
 	return
 }

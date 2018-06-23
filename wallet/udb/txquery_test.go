@@ -1,5 +1,5 @@
 // Copyright (c) 2015 The btcsuite developers
-// Copyright (c) 2015-2016 The coolsnady developers
+// Copyright (c) 2015-2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxd/wire"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 )
 
 type queryState struct {
@@ -81,17 +81,17 @@ func (q *queryState) compare(t *testing.T, s *Store, changeDesc string) {
 	checkBlock := func(blocks [][]TxDetails) func([]TxDetails) (bool, error) {
 		return func(got []TxDetails) (bool, error) {
 			if len(fwdBlocks) == 0 {
-				return false, errors.Errorf("entered range when no more details expected")
+				return false, fmt.Errorf("entered range when no more details expected")
 			}
 			exp := blocks[0]
 			if len(got) != len(exp) {
-				return false, errors.Errorf("got len(details)=%d in transaction range, expected %d", len(got), len(exp))
+				return false, fmt.Errorf("got len(details)=%d in transaction range, expected %d", len(got), len(exp))
 			}
 			for i := range got {
 				equalTxDetails(t, &got[i], &exp[i])
 			}
 			if t.Failed() {
-				return false, errors.Errorf("Failed comparing range of transaction details")
+				return false, fmt.Errorf("Failed comparing range of transaction details")
 			}
 			blocks = blocks[1:]
 			return false, nil
@@ -328,7 +328,7 @@ func TestStoreQueries(t *testing.T) {
 	})
 
 	// Insert another unmined transaction which spends txA:0, splitting the
-	// amount into outputs of 40 and 60 HXD.
+	// amount into outputs of 40 and 60 DCR.
 	txB := spendOutput(&recA.Hash, 0, 0, 40e8, 60e8)
 	recB := newTxRecordFromMsgTx(txB, timeNow())
 	newState = lastState.deepCopy()

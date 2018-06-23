@@ -1,5 +1,5 @@
 // Copyright (c) 2014 The btcsuite developers
-// Copyright (c) 2015-2018 The coolsnady developers
+// Copyright (c) 2015-2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -9,8 +9,9 @@ import (
 	"encoding/hex"
 
 	"github.com/coolsnady/hxd/chaincfg/chainec"
-	"github.com/coolsnady/hxd/dcrutil"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxd/hdkeychain"
+	"github.com/coolsnady/hxwallet/apperrors"
 )
 
 // ManagedAddress is an interface that provides acces to information regarding
@@ -165,13 +166,15 @@ func (a *managedAddress) ExportPubKey() string {
 func newManagedAddressWithoutPrivKey(m *Manager, account uint32, pubKey chainec.PublicKey, compressed bool) (*managedAddress, error) {
 	// Create a pay-to-pubkey-hash address from the public key.
 	var pubKeyHash []byte
-	if compressed {
+	if compressed && pubKey.GetType() == chainec.ECTypeSecp256k1 {
 		pubKeyHash = dcrutil.Hash160(pubKey.SerializeCompressed())
-	} else {
+	} else if pubKey.GetType() == chainec.ECTypeSecp256k1 {
 		pubKeyHash = dcrutil.Hash160(pubKey.SerializeUncompressed())
+	} else {
+		pubKeyHash = dcrutil.Hash160(pubKey.Serialize())
 	}
 	address, err := dcrutil.NewAddressPubKeyHash(pubKeyHash, m.chainParams,
-		chainec.ECTypeSecp256k1)
+		pubKey.GetType())
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +198,8 @@ func newManagedAddressWithoutPrivKey(m *Manager, account uint32, pubKey chainec.
 func newManagedAddressFromExtKey(m *Manager, account uint32, key *hdkeychain.ExtendedKey) (*managedAddress, error) {
 	pubKey, err := key.ECPubKey()
 	if err != nil {
-		return nil, err
+		const str = "failed to create public key"
+		return nil, apperrors.E{ErrorCode: apperrors.ErrKeyChain, Description: str, Err: err}
 	}
 
 	return newManagedAddressWithoutPrivKey(m, account, pubKey, true)

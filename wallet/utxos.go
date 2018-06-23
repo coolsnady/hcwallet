@@ -1,15 +1,16 @@
 package wallet
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/coolsnady/hxd/blockchain"
-	"github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxd/txscript"
 	"github.com/coolsnady/hxd/wire"
-	"github.com/coolsnady/hxwallet/errors"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	"github.com/coolsnady/hxwallet/apperrors"
 	"github.com/coolsnady/hxwallet/wallet/udb"
+	"github.com/coolsnady/hxwallet/walletdb"
 )
 
 // OutputSelectionPolicy describes the rules for selecting an output from the
@@ -26,7 +27,6 @@ func (p *OutputSelectionPolicy) meetsRequiredConfs(txHeight, curHeight int32) bo
 // UnspentOutputs fetches all unspent outputs from the wallet that match rules
 // described in the passed policy.
 func (w *Wallet) UnspentOutputs(policy OutputSelectionPolicy) ([]*TransactionOutput, error) {
-	const op errors.Op = "wallet.UnspentOutputs"
 	var outputResults []*TransactionOutput
 	err := walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 		addrmgrNs := tx.ReadBucket(waddrmgrNamespaceKey)
@@ -92,10 +92,7 @@ func (w *Wallet) UnspentOutputs(policy OutputSelectionPolicy) ([]*TransactionOut
 
 		return nil
 	})
-	if err != nil {
-		return nil, errors.E(op, err)
-	}
-	return outputResults, nil
+	return outputResults, err
 }
 
 // SelectInputs selects transaction inputs to redeem unspent outputs stored in
@@ -103,8 +100,9 @@ func (w *Wallet) UnspentOutputs(policy OutputSelectionPolicy) ([]*TransactionOut
 // transaction outputs, a slice of transaction inputs referencing these outputs,
 // and a slice of previous output scripts from each previous output referenced
 // by the corresponding input.
-func (w *Wallet) SelectInputs(targetAmount dcrutil.Amount, policy OutputSelectionPolicy) (total dcrutil.Amount, inputs []*wire.TxIn, prevScripts [][]byte, err error) {
-	const op errors.Op = "wallet.SelectInputs"
+func (w *Wallet) SelectInputs(targetAmount dcrutil.Amount, policy OutputSelectionPolicy) (total dcrutil.Amount,
+	inputs []*wire.TxIn, prevScripts [][]byte, err error) {
+
 	err = walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 		addrmgrNs := tx.ReadBucket(waddrmgrNamespaceKey)
 		txmgrNs := tx.ReadBucket(wtxmgrNamespaceKey)
@@ -116,7 +114,10 @@ func (w *Wallet) SelectInputs(targetAmount dcrutil.Amount, policy OutputSelectio
 				return err
 			}
 			if policy.Account > lastAcct {
-				return errors.E(errors.NotExist, "account not found")
+				return apperrors.E{
+					ErrorCode:   apperrors.ErrAccountNotFound,
+					Description: "account not found",
+				}
 			}
 		}
 
@@ -126,9 +127,6 @@ func (w *Wallet) SelectInputs(targetAmount dcrutil.Amount, policy OutputSelectio
 		total, inputs, prevScripts, err = sourceImpl.SelectInputs(targetAmount)
 		return err
 	})
-	if err != nil {
-		err = errors.E(op, err)
-	}
 	return
 }
 
@@ -142,27 +140,24 @@ type OutputInfo struct {
 
 // OutputInfo queries the wallet for additional transaction output info
 // regarding an outpoint.
-func (w *Wallet) OutputInfo(out *wire.OutPoint) (OutputInfo, error) {
-	const op errors.Op = "wallet.OutputInfo"
+func (w *Wallet) OutputInfo(op *wire.OutPoint) (OutputInfo, error) {
 	var info OutputInfo
 	err := walletdb.View(w.db, func(dbtx walletdb.ReadTx) error {
 		txmgrNs := dbtx.ReadBucket(wtxmgrNamespaceKey)
 
-		txDetails, err := w.TxStore.TxDetails(txmgrNs, &out.Hash)
+		txDetails, err := w.TxStore.TxDetails(txmgrNs, &op.Hash)
 		if err != nil {
 			return err
 		}
-		if out.Index >= uint32(len(txDetails.TxRecord.MsgTx.TxOut)) {
-			return errors.Errorf("transaction has no output %d", out.Index)
+		if op.Index >= uint32(len(txDetails.TxRecord.MsgTx.TxOut)) {
+			return fmt.Errorf("output %d not found, transaction only contains %d outputs",
+				op.Index, len(txDetails.TxRecord.MsgTx.TxOut))
 		}
 
 		info.Received = txDetails.Received
-		info.Amount = dcrutil.Amount(txDetails.TxRecord.MsgTx.TxOut[out.Index].Value)
+		info.Amount = dcrutil.Amount(txDetails.TxRecord.MsgTx.TxOut[op.Index].Value)
 		info.FromCoinbase = blockchain.IsCoinBaseTx(&txDetails.TxRecord.MsgTx)
 		return nil
 	})
-	if err != nil {
-		return info, errors.E(op, err)
-	}
-	return info, nil
+	return info, err
 }

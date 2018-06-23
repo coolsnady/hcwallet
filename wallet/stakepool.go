@@ -1,26 +1,25 @@
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 package wallet
 
 import (
-	"github.com/coolsnady/hxd/dcrutil"
-	"github.com/coolsnady/hxwallet/errors"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
+	"errors"
+
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxwallet/wallet/udb"
+	"github.com/coolsnady/hxwallet/walletdb"
 )
 
 // StakePoolUserInfo returns the stake pool user information for a user
 // identified by their P2SH voting address.
 func (w *Wallet) StakePoolUserInfo(userAddress dcrutil.Address) (*udb.StakePoolUser, error) {
-	const op errors.Op = "wallet.StakePoolUserInfo"
-
 	switch userAddress.(type) {
 	case *dcrutil.AddressPubKeyHash: // ok
 	case *dcrutil.AddressScriptHash: // ok
 	default:
-		return nil, errors.E(op, errors.Invalid, "address must be P2PKH or P2SH")
+		return nil, errors.New("stake pool user address must be P2PKH or P2SH")
 	}
 
 	var user *udb.StakePoolUser
@@ -30,8 +29,5 @@ func (w *Wallet) StakePoolUserInfo(userAddress dcrutil.Address) (*udb.StakePoolU
 		user, err = w.StakeMgr.StakePoolUserInfo(stakemgrNs, userAddress)
 		return err
 	})
-	if err != nil {
-		return nil, errors.E(op, err)
-	}
-	return user, nil
+	return user, err
 }

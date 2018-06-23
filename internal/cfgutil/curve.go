@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -6,8 +6,7 @@ package cfgutil
 
 import (
 	"crypto/elliptic"
-
-	"github.com/coolsnady/hxwallet/errors"
+	"fmt"
 )
 
 // CurveID specifies a recognized curve through a constant value.
@@ -44,7 +43,7 @@ func (f *CurveFlag) MarshalFlag() (name string, err error) {
 	case CurveP521:
 		name = "P-521"
 	default:
-		err = errors.Errorf("unknown curve ID %v", int(f.curveID))
+		err = fmt.Errorf("unknown curve ID %v", int(f.curveID))
 	}
 	return
 }
@@ -61,7 +60,7 @@ func (f *CurveFlag) UnmarshalFlag(value string) error {
 	case "P-521":
 		f.curveID = CurveP521
 	default:
-		return errors.Errorf("unrecognized curve %v", value)
+		return fmt.Errorf("unrecognized curve %v", value)
 	}
 	return nil
 }

@@ -1,5 +1,5 @@
 // Copyright (c) 2014 The btcsuite developers
-// Copyright (c) 2015 The coolsnady developers
+// Copyright (c) 2015 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -13,7 +13,8 @@ interface. The functions are only exported while the tests are being run.
 package udb
 
 import (
-	"github.com/coolsnady/hxwallet/errors"
+	"errors"
+
 	"github.com/coolsnady/hxwallet/snacl"
 )
 
@@ -30,7 +31,7 @@ func TstRunWithReplacedNewSecretKey(callback func()) {
 		newSecretKey = orig
 	}()
 	newSecretKey = func(passphrase *[]byte, config *ScryptOptions) (*snacl.SecretKey, error) {
-		return nil, errors.E(errors.Crypto)
+		return nil, snacl.ErrDecryptFailed
 	}
 	callback()
 }

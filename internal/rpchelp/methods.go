@@ -1,5 +1,5 @@
 // Copyright (c) 2015 The btcsuite developers
-// Copyright (c) 2015-2017 The coolsnady developers
+// Copyright (c) 2015-2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -33,7 +33,7 @@ var Methods = []struct {
 	{"getaccount", returnsString},
 	{"getaccountaddress", returnsString},
 	{"getaddressesbyaccount", returnsStringArray},
-	{"getbalance", []interface{}{(*dcrjson.GetBalanceResult)(nil)}},
+	{"getbalance", append(returnsNumber, returnsNumber[0])},
 	{"getbestblockhash", returnsString},
 	{"getblockcount", returnsNumber},
 	{"getinfo", []interface{}{(*dcrjson.InfoWalletResult)(nil)}},
@@ -71,9 +71,6 @@ var Methods = []struct {
 	{"signmessage", returnsString},
 	{"signrawtransaction", []interface{}{(*dcrjson.SignRawTransactionResult)(nil)}},
 	{"signrawtransactions", []interface{}{(*dcrjson.SignRawTransactionsResult)(nil)}},
-	{"startautobuyer", nil},
-	{"stopautobuyer", nil},
-	{"sweepaccount", []interface{}{(*dcrjson.SweepAccountResult)(nil)}},
 	{"validateaddress", []interface{}{(*dcrjson.ValidateAddressWalletResult)(nil)}},
 	{"verifymessage", returnsBool},
 	{"version", []interface{}{(*map[string]dcrjson.VersionResult)(nil)}},
@@ -92,6 +89,9 @@ var Methods = []struct {
 
 	// TODO Alphabetize
 	{"purchaseticket", returnsString},
+	{"sendtossrtx", returnsString},
+	{"sendtosstx", returnsString},
+	{"sendtossgen", returnsString},
 	{"generatevote", []interface{}{(*dcrjson.GenerateVoteResult)(nil)}},
 	{"getstakeinfo", []interface{}{(*dcrjson.GetStakeInfoResult)(nil)}},
 	{"getticketfee", returnsNumber},

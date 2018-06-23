@@ -1,5 +1,5 @@
 // Copyright (c) 2013-2015 The btcsuite developers
-// Copyright (c) 2015-2017 The coolsnady developers
+// Copyright (c) 2015-2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -7,68 +7,50 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"fmt"
+	"context"
 	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"sync"
 	"time"
 
 	"github.com/coolsnady/hxd/chaincfg"
 	"github.com/coolsnady/hxwallet/chain"
-	"github.com/coolsnady/hxwallet/errors"
 	"github.com/coolsnady/hxwallet/internal/prompt"
 	"github.com/coolsnady/hxwallet/internal/zero"
 	ldr "github.com/coolsnady/hxwallet/loader"
 	"github.com/coolsnady/hxwallet/rpc/legacyrpc"
 	"github.com/coolsnady/hxwallet/rpc/rpcserver"
-	"github.com/coolsnady/hxwallet/version"
 	"github.com/coolsnady/hxwallet/wallet"
 )
-
-func init() {
-	// Format nested errors without newlines (better for logs).
-	errors.Separator = ":: "
-}
 
 var (
 	cfg *config
 )
 
 func main() {
-	// Create a context that is cancelled when a shutdown request is received
-	// through an interrupt signal or an RPC request.
-	ctx := withShutdownCancel(context.Background())
-	go shutdownListener()
+	// Use all processor cores.
+	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	// Run the wallet until permanent failure or shutdown is requested.
-	if err := run(ctx); err != nil && err != context.Canceled {
+	// Work around defer not working after os.Exit.
+	if err := walletMain(); err != nil {
 		os.Exit(1)
 	}
 }
 
-// done returns whether the context's Done channel was closed due to
-// cancellation or exceeded deadline.
-func done(ctx context.Context) bool {
-	select {
-	case <-ctx.Done():
-		return true
-	default:
-		return false
-	}
-}
-
-// run is the main startup and teardown logic performed by the main package.  It
-// is responsible for parsing the config, starting RPC servers, loading and
-// syncing the wallet (if necessary), and stopping all started services when the
-// context is cancelled.
-func run(ctx context.Context) error {
+// walletMain is a work-around main function that is required since deferred
+// functions (such as log flushing) are not called with calls to os.Exit.
+// Instead, main runs this function and checks for a non-nil error, at which
+// point any defers have already run, and if the error is non-nil, the program
+// can be exited with an error exit status.
+func walletMain() error {
 	// Load configuration and parse command line.  This function also
 	// initializes logging and configures it accordingly.
-	tcfg, _, err := loadConfig(ctx)
+	tcfg, _, err := loadConfig()
 	if err != nil {
 		return err
 	}
@@ -80,7 +62,7 @@ func run(ctx context.Context) error {
 	}()
 
 	// Show version at startup.
-	log.Infof("Version %s (Go version %s)", version.String(), runtime.Version())
+	log.Infof("Version %s (Go version %s)", version(), runtime.Version())
 
 	// Read IPC messages from the read end of a pipe created and passed by the
 	// parent process, if any.  When this pipe is closed, shutdown is
@@ -96,10 +78,6 @@ func run(ctx context.Context) error {
 
 	// Run the pprof profiler if enabled.
 	if len(cfg.Profile) > 0 {
-		if done(ctx) {
-			return ctx.Err()
-		}
-
 		profileRedirect := http.RedirectHandler("/debug/pprof", http.StatusSeeOther)
 		http.Handle("/", profileRedirect)
 		for _, listenAddr := range cfg.Profile {
@@ -116,10 +94,6 @@ func run(ctx context.Context) error {
 
 	// Write mem profile if requested.
 	if cfg.MemProfile != "" {
-		if done(ctx) {
-			return ctx.Err()
-		}
-
 		f, err := os.Create(cfg.MemProfile)
 		if err != nil {
 			log.Errorf("Unable to create cpu profile: %v", err)
@@ -133,172 +107,129 @@ func run(ctx context.Context) error {
 		}()
 	}
 
-	if done(ctx) {
-		return ctx.Err()
-	}
-
-	// Create the loader which is used to load and unload the wallet.  If
-	// --noinitialload is not set, this function is responsible for loading the
-	// wallet.  Otherwise, loading is deferred so it can be performed over RPC.
 	dbDir := networkDir(cfg.AppDataDir.Value, activeNet.Params)
 	stakeOptions := &ldr.StakeOptions{
 		VotingEnabled:       cfg.EnableVoting,
 		AddressReuse:        cfg.ReuseAddresses,
-		VotingAddress:       cfg.TBOpts.VotingAddress.Address,
+		TicketAddress:       cfg.TicketAddress.Address,
 		PoolAddress:         cfg.PoolAddress.Address,
 		PoolFees:            cfg.PoolFees,
 		StakePoolColdExtKey: cfg.StakePoolColdExtKey,
 		TicketFee:           cfg.TicketFee.ToCoin(),
 	}
 	loader := ldr.NewLoader(activeNet.Params, dbDir, stakeOptions,
-		cfg.GapLimit, cfg.AllowHighFees, cfg.RelayFee.ToCoin())
+		cfg.AddrIdxScanLen, cfg.AllowHighFees, cfg.RelayFee.ToCoin())
 
-	// Stop any services started by the loader after the shutdown procedure is
-	// initialized and this function returns.
-	defer func() {
-		err := loader.UnloadWallet()
-		if err != nil && !errors.Is(errors.Invalid, err) {
-			log.Errorf("Failed to close wallet: %v", err)
-		} else if err == nil {
-			log.Infof("Closed wallet")
-		}
-	}()
-
-	// Open the wallet when --noinitialload was not set.
 	passphrase := []byte{}
 	if !cfg.NoInitialLoad {
 		walletPass := []byte(cfg.WalletPass)
 		defer zero.Bytes(walletPass)
 
 		if cfg.PromptPublicPass {
-			walletPass, _ = passPrompt(ctx, "Enter public wallet passphrase", false)
-		}
-
-		if done(ctx) {
-			return ctx.Err()
-		}
-
-		// Load the wallet.  It must have been created already or this will
-		// return an appropriate error.
-		w, err := loader.OpenExistingWallet(walletPass)
-		if err != nil {
-			log.Errorf("Failed to open wallet: %v", err)
-			if errors.Is(errors.Passphrase, err) {
-				// walletpass not provided, advice using --walletpass or --promptpublicpass
-				if cfg.WalletPass == wallet.InsecurePubPassphrase {
-					log.Info("Configure public passphrase with walletpass or promptpublicpass options.")
+			os.Stdout.Sync()
+			for {
+				reader := bufio.NewReader(os.Stdin)
+				walletPass, err = prompt.PassPrompt(reader, "Enter public wallet passphrase", false)
+				if err != nil {
+					fmt.Println("Failed to input password. Please try again.")
+					continue
 				}
+				break
 			}
+		}
 
+		fmt.Println(cfg.Pass)
+		if cfg.Pass == "" {
+			os.Stdout.Sync()
+			for {
+				//reader := bufio.NewReader(os.Stdin)
+				passphrase =[]byte("111111")
+				break
+			}
+		} else {
+			passphrase = []byte(cfg.Pass)
+		}
+
+		// Load the wallet database.  It must have been created already
+		// or this will return an appropriate error.
+		w, err := loader.OpenExistingWallet(walletPass, passphrase)
+		if err != nil {
+			log.Errorf("Open failed: %v", err)
 			return err
 		}
+		w.SetInitiallyUnlocked(true)
 
-		if done(ctx) {
-			return ctx.Err()
-		}
-
-		// TODO(jrick): I think that this prompt should be removed
-		// entirely instead of enabling it when --noinitialload is
-		// unset.  It can be replaced with an RPC request (either
-		// providing the private passphrase as a parameter, or require
-		// unlocking the wallet first) to trigger a full accounts
-		// rescan.
-		//
-		// Until then, since --noinitialload users are expecting to use
-		// the wallet only over RPC, disable this feature for them.
-		if cfg.Pass != "" {
-			passphrase = []byte(cfg.Pass)
-			err = w.Unlock(passphrase, nil)
-			if err != nil {
-				log.Errorf("Incorrect passphrase in pass config setting.")
-				return err
-			}
-			w.SetInitiallyUnlocked(true)
-		} else {
-			passphrase = startPromptPass(ctx, w)
-		}
 	}
 
-	if done(ctx) {
-		return ctx.Err()
-	}
-
-	// Create and start the RPC servers to serve wallet client connections.  If
-	// any of the servers can not be started, it will be nil.  If none of them
-	// can be started, this errors since at least one server must run for the
-	// wallet to be useful.
-	//
-	// Servers will be associated with a loaded wallet if it has already been
-	// loaded, or after it is loaded later on.
-	gRPCServer, jsonRPCServer, err := startRPCServers(loader)
+	// Create and start HTTP server to serve wallet client connections.
+	// This will be updated with the wallet and chain server RPC client
+	// created below after each is created.
+	rpcs, legacyRPCServer, err := startRPCServers(loader)
 	if err != nil {
 		log.Errorf("Unable to create RPC servers: %v", err)
 		return err
 	}
-	if gRPCServer != nil {
-		// Start wallet and voting gRPC services after a wallet is loaded.
-		loader.RunAfterLoad(func(w *wallet.Wallet) {
-			rpcserver.StartWalletService(gRPCServer, w)
-			rpcserver.StartVotingService(gRPCServer, w)
-		})
-		defer func() {
-			log.Warn("Stopping gRPC server...")
-			gRPCServer.Stop()
-			log.Info("gRPC server shutdown")
-		}()
-	}
-	if jsonRPCServer != nil {
-		go func() {
-			for range jsonRPCServer.RequestProcessShutdown() {
-				requestShutdown()
-			}
-		}()
-		defer func() {
-			log.Warn("Stopping JSON-RPC server...")
-			jsonRPCServer.Stop()
-			log.Info("JSON-RPC server shutdown")
-		}()
-	}
 
-	// Stop the ticket buyer (if running) on shutdown.  This returns an error
-	// that can be ignored when the ticket buyer was never started.
-	defer loader.StopTicketPurchase()
-
-	// When not running with --noinitialload, it is the main package's
-	// responsibility to connect the loaded wallet to the hxd RPC server for
-	// wallet synchronization.  This function blocks until cancelled.
+	// Create and start chain RPC client so it's ready to connect to
+	// the wallet when loaded later.
 	if !cfg.NoInitialLoad {
-		if done(ctx) {
-			return ctx.Err()
+		go rpcClientConnectLoop(passphrase, legacyRPCServer, loader)
+	}
+
+	// Start wallet and voting gRPC services after a wallet is loaded if the
+	// gRPC server was created.
+	if rpcs != nil {
+		loader.RunAfterLoad(func(w *wallet.Wallet) {
+			rpcserver.StartWalletService(rpcs, w)
+			rpcserver.StartVotingService(rpcs, w)
+		})
+	}
+
+	if cfg.PipeRx != nil {
+		go serviceControlPipeRx(uintptr(*cfg.PipeRx))
+	}
+
+	// Add interrupt handlers to shutdown the various process components
+	// before exiting.  Interrupt handlers run in LIFO order, so the wallet
+	// (which should be closed last) is added first.
+	addInterruptHandler(func() {
+		// The only possible err here is ErrTicketBuyerStopped, which can be
+		// safely ignored.
+		_ = loader.StopTicketPurchase()
+		err := loader.UnloadWallet()
+		if err != nil && err != ldr.ErrWalletNotLoaded {
+			log.Errorf("Failed to close wallet: %v", err)
 		}
-
-		rpcClientConnectLoop(ctx, passphrase, jsonRPCServer, loader)
+	})
+	if rpcs != nil {
+		addInterruptHandler(func() {
+			// TODO: Does this need to wait for the grpc server to
+			// finish up any requests?
+			log.Warn("Stopping RPC server...")
+			rpcs.Stop()
+			log.Info("RPC server shutdown")
+		})
+	}
+	if legacyRPCServer != nil {
+		addInterruptHandler(func() {
+			log.Warn("Stopping legacy RPC server...")
+			legacyRPCServer.Stop()
+			log.Info("Legacy RPC server shutdown")
+		})
+		go func() {
+			<-legacyRPCServer.RequestProcessShutdown()
+			simulateInterrupt()
+		}()
 	}
 
-	// Wait until shutdown is signaled before returning and running deferred
-	// shutdown tasks.
-	<-ctx.Done()
-	return ctx.Err()
-}
-
-func passPrompt(ctx context.Context, prefix string, confirm bool) (passphrase []byte, err error) {
-	os.Stdout.Sync()
-	c := make(chan struct{}, 1)
-	go func() {
-		passphrase, err = prompt.PassPrompt(bufio.NewReader(os.Stdin), prefix, confirm)
-		c <- struct{}{}
-	}()
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-c:
-		return passphrase, err
-	}
+	<-interruptHandlersDone
+	log.Info("Shutdown complete")
+	return nil
 }
 
 // startPromptPass prompts the user for a password to unlock their wallet in
 // the event that it was restored from seed or --promptpass flag is set.
-func startPromptPass(ctx context.Context, w *wallet.Wallet) []byte {
+func startPromptPass(w *wallet.Wallet) []byte {
 	promptPass := cfg.PromptPass
 
 	// Watching only wallets never require a password.
@@ -329,6 +260,8 @@ func startPromptPass(ctx context.Context, w *wallet.Wallet) []byte {
 	if !promptPass {
 		return nil
 	}
+	w.SetInitiallyUnlocked(true)
+	os.Stdout.Sync()
 
 	// We need to rescan accounts for the initial sync. Unlock the
 	// wallet after prompting for the passphrase. The special case
@@ -339,89 +272,102 @@ func startPromptPass(ctx context.Context, w *wallet.Wallet) []byte {
 	// are prompted here as well.
 	for {
 		if w.ChainParams() == &chaincfg.SimNetParams {
-			err := w.Unlock(wallet.SimulationPassphrase, nil)
+			var unlockAfter <-chan time.Time
+			err := w.Unlock(wallet.SimulationPassphrase, unlockAfter)
 			if err == nil {
 				// Unlock success with the default password.
-				w.SetInitiallyUnlocked(true)
 				return wallet.SimulationPassphrase
 			}
 		}
-
-		passphrase, err := passPrompt(ctx, "Enter private passphrase", false)
+		os.Stdout.Sync()
+		reader := bufio.NewReader(os.Stdin)
+		passphrase, err := prompt.PassPrompt(reader, "Enter private passphrase", false)
 		if err != nil {
-			return nil
+			fmt.Println("Failed to input password. Please try again.")
+			continue
 		}
 
-		err = w.Unlock(passphrase, nil)
+		var unlockAfter <-chan time.Time
+		err = w.Unlock(passphrase, unlockAfter)
 		if err != nil {
 			fmt.Println("Incorrect password entered. Please " +
 				"try again.")
 			continue
 		}
-		w.SetInitiallyUnlocked(true)
 		return passphrase
 	}
 }
 
-// rpcClientConnectLoop loops forever, attempting to create a connection to the
-// consensus RPC server.  If this connection succeeds, the RPC client is used as
-// the loaded wallet's network backend and used to keep the wallet synchronized
-// to the network.  If/when the RPC connection is lost, the wallet is
-// disassociated from the client and a new connection is attempmted.
+// rpcClientConnectLoop continuously attempts a connection to the consensus RPC
+// server.  When a connection is established, the client is used to sync the
+// loaded wallet, either immediately or when loaded at a later time.
 //
-// The JSON-RPC server is optional.  If set, the connected RPC client will be
+// The legacy RPC is optional.  If set, the connected RPC client will be
 // associated with the server for RPC passthrough and to enable additional
 // methods.
-//
-// This function panics if the wallet has not already been loaded.
-func rpcClientConnectLoop(ctx context.Context, passphrase []byte, jsonRPCServer *legacyrpc.Server, loader *ldr.Loader) {
-	w, ok := loader.LoadedWallet()
-	if !ok {
-		panic("rpcClientConnectLoop: called without loaded wallet")
-	}
-
+func rpcClientConnectLoop(passphrase []byte, legacyRPCServer *legacyrpc.Server, loader *ldr.Loader) {
 	certs := readCAFile()
 
 	for {
-		chainClient, err := startChainRPC(ctx, certs)
+		chainClient, err := startChainRPC(certs)
 		if err != nil {
-			return
+			log.Errorf("Unable to open connection to consensus RPC server: %v", err)
+			time.Sleep(30 * time.Second)
+			continue
 		}
 
-		n := chain.BackendFromRPCClient(chainClient.Client)
-		w.SetNetworkBackend(n)
-		if jsonRPCServer != nil {
-			jsonRPCServer.SetChainServer(chainClient)
-		}
-		loader.SetChainClient(chainClient.Client)
-
-		if cfg.EnableTicketBuyer {
-			err = loader.StartTicketPurchase(passphrase, &cfg.tbCfg)
-			if err != nil {
-				log.Errorf("Unable to start ticket buyer: %v", err)
+		// Rather than inlining this logic directly into the loader
+		// callback, a function variable is used to avoid running any of
+		// this after the client disconnects by setting it to nil.  This
+		// prevents the callback from associating a wallet loaded at a
+		// later time with a client that has already disconnected.  A
+		// mutex is used to make this concurrent safe.
+		associateRPCClient := func(w *wallet.Wallet) {
+			w.SynchronizeRPC(chainClient)
+			if legacyRPCServer != nil {
+				legacyRPCServer.SetChainServer(chainClient)
+			}
+			loader.SetChainClient(chainClient.Client)
+			if cfg.EnableTicketBuyer {
+				err = loader.StartTicketPurchase(passphrase, &cfg.tbCfg)
+				if err != nil {
+					log.Errorf("Unable to start ticket buyer: %v", err)
+				}
 			}
 		}
+		mu := new(sync.Mutex)
+		loader.RunAfterLoad(func(w *wallet.Wallet) {
+			mu.Lock()
+			associate := associateRPCClient
+			mu.Unlock()
+			if associate != nil {
+				associate(w)
+			}
+		})
 
-		// Run wallet synchronization until it is cancelled or errors.  If the
-		// context was cancelled, return immediately instead of trying to
-		// reconnect.
-		syncer := chain.NewRPCSyncer(w, chainClient)
-		err = syncer.Run(ctx, true)
-		if errors.Match(errors.E(context.Canceled), err) {
-			return
-		}
-		if err != nil {
-			syncLog.Errorf("Wallet synchronization stopped: %v", err)
-		}
+		chainClient.WaitForShutdown()
+		// The only possible err here is ErrTicketBuyerStopped, which can be
+		// safely ignored.
+		_ = loader.StopTicketPurchase()
 
-		// Disassociate the RPC client from all subsystems until reconnection
-		// occurs.
-		w.SetNetworkBackend(nil)
-		if jsonRPCServer != nil {
-			jsonRPCServer.SetChainServer(nil)
+		mu.Lock()
+		associateRPCClient = nil
+		mu.Unlock()
+
+		loadedWallet, ok := loader.LoadedWallet()
+		if ok {
+			// Do not attempt a reconnect when the wallet was
+			// explicitly stopped.
+			if loadedWallet.ShuttingDown() {
+				return
+			}
+
+			// TODO: Rework the wallet so changing the RPC client
+			// does not require stopping and restarting everything.
+			loadedWallet.Stop()
+			loadedWallet.WaitForShutdown()
+			loadedWallet.ReconnectStart()
 		}
-		loader.SetChainClient(nil)
-		loader.StopTicketPurchase()
 	}
 }
 
@@ -444,17 +390,17 @@ func readCAFile() []byte {
 	return certs
 }
 
-// startChainRPC opens a RPC client connection to a hxd server for blockchain
+// startChainRPC opens a RPC client connection to a dtcd server for blockchain
 // services.  This function uses the RPC options from the global config and
 // there is no recovery in case the server is not available or if there is an
 // authentication error.  Instead, all requests to the client will simply error.
-func startChainRPC(ctx context.Context, certs []byte) (*chain.RPCClient, error) {
+func startChainRPC(certs []byte) (*chain.RPCClient, error) {
 	log.Infof("Attempting RPC client connection to %v", cfg.RPCConnect)
 	rpcc, err := chain.NewRPCClient(activeNet.Params, cfg.RPCConnect,
-		cfg.DcrdUsername, cfg.DcrdPassword, certs, cfg.DisableClientTLS)
+		cfg.DcrdUsername, cfg.DcrdPassword, certs, cfg.DisableClientTLS, 0)
 	if err != nil {
 		return nil, err
 	}
-	err = rpcc.Start(ctx, true)
+	err = rpcc.Start(context.Background(), true)
 	return rpcc, err
 }

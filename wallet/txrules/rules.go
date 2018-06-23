@@ -1,16 +1,16 @@
 // Copyright (c) 2016 The btcsuite developers
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 package txrules
 
 import (
-	"github.com/coolsnady/hxd/dcrutil"
+	"errors"
+
 	"github.com/coolsnady/hxd/txscript"
 	"github.com/coolsnady/hxd/wire"
-	"github.com/coolsnady/hxwallet/errors"
-	h "github.com/coolsnady/hxwallet/internal/helpers"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 )
 
 // DefaultRelayFeePerKb is the default minimum relay fee policy for a mempool.
@@ -52,18 +52,24 @@ func IsDustOutput(output *wire.TxOut, relayFeePerKb dcrutil.Amount) bool {
 		relayFeePerKb)
 }
 
+// Transaction rule violations
+var (
+	ErrAmountNegative   = errors.New("transaction output amount is negative")
+	ErrAmountExceedsMax = errors.New("transaction output amount exceeds maximum value")
+	ErrOutputIsDust     = errors.New("transaction output is dust")
+)
+
 // CheckOutput performs simple consensus and policy tests on a transaction
-// output.  Returns with errors.Invalid if output violates consensus rules, and
-// errors.Policy if the output violates a non-consensus policy.
+// output.
 func CheckOutput(output *wire.TxOut, relayFeePerKb dcrutil.Amount) error {
 	if output.Value < 0 {
-		return errors.E(errors.Invalid, "transaction output amount is negative")
+		return ErrAmountNegative
 	}
 	if output.Value > dcrutil.MaxAmount {
-		return errors.E(errors.Invalid, "transaction output amount exceeds maximum value")
+		return ErrAmountExceedsMax
 	}
 	if IsDustOutput(output, relayFeePerKb) {
-		return errors.E(errors.Policy, "transaction output is dust")
+		return ErrOutputIsDust
 	}
 	return nil
 }
@@ -82,18 +88,4 @@ func FeeForSerializeSize(relayFeePerKb dcrutil.Amount, txSerializeSize int) dcru
 	}
 
 	return fee
-}
-
-// PaysHighFees checks whether the signed transaction pays insanely high fees.
-// Transactons are defined to have a high fee if they have pay a fee rate that
-// is 1000 time higher than the default fee.
-func PaysHighFees(totalInput dcrutil.Amount, tx *wire.MsgTx) bool {
-	fee := totalInput - h.SumOutputValues(tx.TxOut)
-	if fee <= 0 {
-		// Impossible to determine
-		return false
-	}
-
-	maxFee := FeeForSerializeSize(1000*DefaultRelayFeePerKb, tx.SerializeSize())
-	return fee > maxFee
 }

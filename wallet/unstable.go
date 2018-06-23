@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -6,10 +6,9 @@ package wallet
 
 import (
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/dcrutil"
-	"github.com/coolsnady/hxwallet/errors"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxwallet/wallet/udb"
+	"github.com/coolsnady/hxwallet/walletdb"
 )
 
 type unstableAPI struct {
@@ -25,8 +24,6 @@ func UnstableAPI(w *Wallet) unstableAPI { return unstableAPI{w} }
 
 // TxDetails calls udb.Store.TxDetails under a single database view transaction.
 func (u unstableAPI) TxDetails(txHash *chainhash.Hash) (*udb.TxDetails, error) {
-	const op errors.Op = "wallet.TxDetails"
-
 	var details *udb.TxDetails
 	err := walletdb.View(u.w.db, func(dbtx walletdb.ReadTx) error {
 		txmgrNs := dbtx.ReadBucket(wtxmgrNamespaceKey)
@@ -34,31 +31,22 @@ func (u unstableAPI) TxDetails(txHash *chainhash.Hash) (*udb.TxDetails, error) {
 		details, err = u.w.TxStore.TxDetails(txmgrNs, txHash)
 		return err
 	})
-	if err != nil {
-		return nil, errors.E(op, err)
-	}
-	return details, nil
+	return details, err
 }
 
 // RangeTransactions calls udb.Store.RangeTransactions under a single
 // database view tranasction.
 func (u unstableAPI) RangeTransactions(begin, end int32, f func([]udb.TxDetails) (bool, error)) error {
-	const op errors.Op = "wallet.RangeTransactions"
-	err := walletdb.View(u.w.db, func(dbtx walletdb.ReadTx) error {
+	return walletdb.View(u.w.db, func(dbtx walletdb.ReadTx) error {
 		txmgrNs := dbtx.ReadBucket(wtxmgrNamespaceKey)
 		return u.w.TxStore.RangeTransactions(txmgrNs, begin, end, f)
 	})
-	if err != nil {
-		return errors.E(op, err)
-	}
-	return nil
 }
 
 // UnspentMultisigCreditsForAddress calls
 // udb.Store.UnspentMultisigCreditsForAddress under a single database view
 // transaction.
 func (u unstableAPI) UnspentMultisigCreditsForAddress(p2shAddr *dcrutil.AddressScriptHash) ([]*udb.MultisigCredit, error) {
-	const op errors.Op = "wallet.UnspentMultisigCreditsForAddress"
 	var multisigCredits []*udb.MultisigCredit
 	err := walletdb.View(u.w.db, func(tx walletdb.ReadTx) error {
 		txmgrNs := tx.ReadBucket(wtxmgrNamespaceKey)
@@ -67,8 +55,5 @@ func (u unstableAPI) UnspentMultisigCreditsForAddress(p2shAddr *dcrutil.AddressS
 			txmgrNs, p2shAddr)
 		return err
 	})
-	if err != nil {
-		return nil, errors.E(op, err)
-	}
-	return multisigCredits, nil
+	return multisigCredits, err
 }

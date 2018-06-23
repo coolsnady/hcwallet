@@ -1,19 +1,19 @@
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
 package wallet
 
 import (
+	"errors"
+
 	"github.com/coolsnady/hxd/chaincfg/chainec"
-	"github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxd/txscript"
 	"github.com/coolsnady/hxd/wire"
-	"github.com/coolsnady/hxwallet/errors"
-	"github.com/coolsnady/hxwallet/wallet/internal/txsizes"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
-	"github.com/coolsnady/hxwallet/wallet/txrules"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
+	"github.com/coolsnady/hxwallet/apperrors"
 	"github.com/coolsnady/hxwallet/wallet/udb"
+	"github.com/coolsnady/hxwallet/walletdb"
 )
 
 // MakeSecp256k1MultiSigScript creates a multi-signature script that can be
@@ -24,8 +24,6 @@ import (
 // This function only works with secp256k1 pubkeys and P2PKH addresses derived
 // from them.
 func (w *Wallet) MakeSecp256k1MultiSigScript(secp256k1Addrs []dcrutil.Address, nRequired int) ([]byte, error) {
-	const op errors.Op = "wallet.MakeSecp256k1MultiSigScript"
-
 	secp256k1PubKeys := make([]*dcrutil.AddressSecpPubKey, len(secp256k1Addrs))
 
 	var dbtx walletdb.ReadTx
@@ -42,14 +40,16 @@ func (w *Wallet) MakeSecp256k1MultiSigScript(secp256k1Addrs []dcrutil.Address, n
 	for i, addr := range secp256k1Addrs {
 		switch addr := addr.(type) {
 		default:
-			return nil, errors.E(op, errors.Invalid, "address key is not secp256k1")
+			return nil, errors.New("cannot make multisig script for " +
+				"a non-secp256k1 public key or P2PKH address")
 
 		case *dcrutil.AddressSecpPubKey:
 			secp256k1PubKeys[i] = addr
 
 		case *dcrutil.AddressPubKeyHash:
 			if addr.DSA(w.chainParams) != chainec.ECTypeSecp256k1 {
-				return nil, errors.E(op, errors.Invalid, "address key is not secp256k1")
+				return nil, errors.New("cannot make multisig " +
+					"script for a non-secp256k1 P2PKH address")
 			}
 
 			if dbtx == nil {
@@ -76,17 +76,11 @@ func (w *Wallet) MakeSecp256k1MultiSigScript(secp256k1Addrs []dcrutil.Address, n
 		}
 	}
 
-	script, err := txscript.MultiSigScript(secp256k1PubKeys, nRequired)
-	if err != nil {
-		return nil, errors.E(op, errors.E(errors.Op("txscript.MultiSigScript"), err))
-	}
-	return script, nil
+	return txscript.MultiSigScript(secp256k1PubKeys, nRequired)
 }
 
 // ImportP2SHRedeemScript adds a P2SH redeem script to the wallet.
 func (w *Wallet) ImportP2SHRedeemScript(script []byte) (*dcrutil.AddressScriptHash, error) {
-	const op errors.Op = "wallet.ImportP2SHRedeemScript"
-
 	var p2shAddr *dcrutil.AddressScriptHash
 	err := walletdb.Update(w.db, func(tx walletdb.ReadWriteTx) error {
 		addrmgrNs := tx.ReadWriteBucket(waddrmgrNamespaceKey)
@@ -102,7 +96,7 @@ func (w *Wallet) ImportP2SHRedeemScript(script []byte) (*dcrutil.AddressScriptHa
 			// Don't care if it's already there, but still have to
 			// set the p2shAddr since the address manager didn't
 			// return anything useful.
-			if errors.Is(errors.Exist, err) {
+			if apperrors.IsError(err, apperrors.ErrDuplicateAddress) {
 				// This function will never error as it always
 				// hashes the script to the correct length.
 				p2shAddr, _ = dcrutil.NewAddressScriptHash(script,
@@ -115,17 +109,12 @@ func (w *Wallet) ImportP2SHRedeemScript(script []byte) (*dcrutil.AddressScriptHa
 		p2shAddr = addrInfo.Address().(*dcrutil.AddressScriptHash)
 		return nil
 	})
-	if err != nil {
-		return nil, errors.E(op, err)
-	}
-	return p2shAddr, nil
+	return p2shAddr, err
 }
 
 // FetchP2SHMultiSigOutput fetches information regarding a wallet's P2SH
 // multi-signature output.
 func (w *Wallet) FetchP2SHMultiSigOutput(outPoint *wire.OutPoint) (*P2SHMultiSigOutput, error) {
-	const op errors.Op = "wallet.FetchP2SHMultiSigOutput"
-
 	var (
 		mso          *udb.MultisigOut
 		redeemScript []byte
@@ -140,10 +129,19 @@ func (w *Wallet) FetchP2SHMultiSigOutput(outPoint *wire.OutPoint) (*P2SHMultiSig
 		}
 
 		redeemScript, err = w.TxStore.GetTxScript(txmgrNs, mso.ScriptHash[:])
-		return err
+		if err != nil {
+			return err
+		}
+		// returns nil, nil when it successfully found no script.  That error is
+		// only used to return early when the database is closed.
+		if redeemScript == nil {
+			return errors.New("script not found")
+		}
+
+		return nil
 	})
 	if err != nil {
-		return nil, errors.E(op, err)
+		return nil, err
 	}
 
 	p2shAddr, err := dcrutil.NewAddressScriptHashFromHash(
@@ -178,43 +176,12 @@ func (w *Wallet) FetchP2SHMultiSigOutput(outPoint *wire.OutPoint) (*P2SHMultiSig
 
 // FetchAllRedeemScripts returns all P2SH redeem scripts saved by the wallet.
 func (w *Wallet) FetchAllRedeemScripts() ([][]byte, error) {
-	const op errors.Op = "wallet.FetchAllRedeemScripts"
-
 	var redeemScripts [][]byte
 	err := walletdb.View(w.db, func(dbtx walletdb.ReadTx) error {
 		txmgrNs := dbtx.ReadBucket(wtxmgrNamespaceKey)
-		redeemScripts = w.TxStore.StoredTxScripts(txmgrNs)
-		return nil
+		var err error
+		redeemScripts, err = w.TxStore.StoredTxScripts(txmgrNs)
+		return err
 	})
-	if err != nil {
-		return nil, errors.E(op, err)
-	}
-	return redeemScripts, nil
-}
-
-// PrepareRedeemMultiSigOutTxOutput estimates the tx value for a MultiSigOutTx
-// output and adds it to msgTx.
-func (w *Wallet) PrepareRedeemMultiSigOutTxOutput(msgTx *wire.MsgTx, p2shOutput *P2SHMultiSigOutput, pkScript *[]byte) error {
-	const op errors.Op = "wallet.PrepareRedeemMultiSigOutTxOutput"
-
-	scriptSizers := []txsizes.ScriptSizer{}
-	// generate the script sizers for the inputs
-	for range msgTx.TxIn {
-		scriptSizers = append(scriptSizers, txsizes.P2SHScriptSize)
-	}
-
-	// estimate the output fee
-	txOut := wire.NewTxOut(0, *pkScript)
-	feeSize := txsizes.EstimateSerializeSize(scriptSizers, []*wire.TxOut{txOut}, false)
-	feeEst := txrules.FeeForSerializeSize(w.RelayFee(), feeSize)
-	if feeEst >= p2shOutput.OutputAmount {
-		return errors.E(op, errors.Errorf("estimated fee %v is above output value %v",
-			feeEst, p2shOutput.OutputAmount))
-	}
-
-	toReceive := p2shOutput.OutputAmount - feeEst
-	// set the output value and add to the tx
-	txOut.Value = int64(toReceive)
-	msgTx.AddTxOut(txOut)
-	return nil
+	return redeemScripts, err
 }

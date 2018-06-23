@@ -1,4 +1,4 @@
-// Copyright (c) 2016 The coolsnady developers
+// Copyright (c) 2016 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/dcrutil"
 	"github.com/coolsnady/hxd/wire"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 )
 
 // Note: The following common types should never reference the Wallet type.
@@ -26,7 +26,7 @@ type BlockIdentity struct {
 // None returns whether there is no block described by the instance.  When
 // associated with a transaction, this indicates the transaction is unmined.
 func (b *BlockIdentity) None() bool {
-	// BUG: Because hxwallet uses both 0 and -1 in various places to refer
+	// BUG: Because dcrwallet uses both 0 and -1 in various places to refer
 	// to an unmined transaction this must check against both and may not
 	// ever be usable to represent the genesis block.
 	return *b == BlockIdentity{Height: -1} || *b == BlockIdentity{}

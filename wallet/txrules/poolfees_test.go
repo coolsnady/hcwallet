@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxd/dcrutil"
+	dcrutil "github.com/coolsnady/hxd/dcrutil"
 	. "github.com/coolsnady/hxwallet/wallet/txrules"
 )
 

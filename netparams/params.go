@@ -1,5 +1,5 @@
 // Copyright (c) 2013-2015 The btcsuite developers
-// Copyright (c) 2016-2017 The coolsnady developers
+// Copyright (c) 2016-2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -16,8 +16,8 @@ type Params struct {
 	GRPCServerPort    string
 }
 
-// MainNetParams contains parameters specific running hxwallet and
-// hxd on the main network (wire.MainNet).
+// MainNetParams contains parameters specific running dcrwallet and
+// dcrd on the main network (wire.MainNet).
 var MainNetParams = Params{
 	Params:            &chaincfg.MainNetParams,
 	JSONRPCClientPort: "9109",
@@ -25,8 +25,8 @@ var MainNetParams = Params{
 	GRPCServerPort:    "9111",
 }
 
-// TestNet2Params contains parameters specific running hxwallet and
-// hxd on the test network (version 2) (wire.TestNet2).
+// TestNet2Params contains parameters specific running dcrwallet and
+// dcrd on the test network (version 2) (wire.TestNet2).
 var TestNet2Params = Params{
 	Params:            &chaincfg.TestNet2Params,
 	JSONRPCClientPort: "19109",

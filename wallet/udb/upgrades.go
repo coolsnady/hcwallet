@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The coolsnady developers
+// Copyright (c) 2017 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -11,11 +11,9 @@ import (
 	"github.com/coolsnady/hxd/chaincfg"
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
 	"github.com/coolsnady/hxd/hdkeychain"
-	"github.com/coolsnady/hxd/txscript"
-	"github.com/coolsnady/hxd/wire"
-	"github.com/coolsnady/hxwallet/errors"
+	"github.com/coolsnady/hxwallet/apperrors"
 	"github.com/coolsnady/hxwallet/snacl"
-	"github.com/coolsnady/hxwallet/wallet/internal/walletdb"
+	"github.com/coolsnady/hxwallet/walletdb"
 )
 
 // Note: all manager functions always use the latest version of the database.
@@ -58,49 +56,24 @@ const (
 	// or revocation.
 	ticketBucketVersion = 6
 
-	// slip0044CoinTypeVersion is the seventh version of the database.  It
-	// introduces the possibility of the BIP0044 coin type key being either the
-	// legacy coin type used by earlier versions of the wallet, or the coin type
-	// assigned to coolsnady in SLIP0044.  The upgrade does not add or remove any
-	// required keys (the upgrade is done in a backwards-compatible way) but the
-	// database version is bumped to prevent older software from assuming that
-	// coin type 20 exists (the upgrade is not forwards-compatible).
-	slip0044CoinTypeVersion = 7
-
-	// hasExpiryVersion is the eight version of the database. It adds the
-	// hasExpiry field to the credit struct, adds fetchRawCreditHasExpiry
-	// helper func and extends sstxchange type utxo checks to only make sstchange
-	// with expiries set available to spend after coinbase maturity (16 blocks).
-	hasExpiryVersion = 8
-
-	// hasExpiryFixedVersion is the ninth version of the database.  It corrects
-	// the previous upgrade by writing the has expiry bit to an unused bit flag
-	// rather than in the stake flags and fixes various UTXO selection issues
-	// caused by misinterpreting ticket outputs as spendable by regular
-	// transactions.
-	hasExpiryFixedVersion = 9
-
 	// DBVersion is the latest version of the database that is understood by the
 	// program.  Databases with recorded versions higher than this will fail to
 	// open (meaning any upgrades prevent reverting to older software).
-	DBVersion = hasExpiryFixedVersion
+	DBVersion = ticketBucketVersion
 )
 
 // upgrades maps between old database versions and the upgrade function to
 // upgrade the database to the next version.  Note that there was never a
 // version zero so upgrades[0] is nil.
-var upgrades = [...]func(walletdb.ReadWriteTx, []byte) error{
+var upgrades = [...]func(walletdb.ReadWriteTx, []byte, []byte) error{
 	lastUsedAddressIndexVersion - 1: lastUsedAddressIndexUpgrade,
 	votingPreferencesVersion - 1:    votingPreferencesUpgrade,
 	noEncryptedSeedVersion - 1:      noEncryptedSeedUpgrade,
 	lastReturnedAddressVersion - 1:  lastReturnedAddressUpgrade,
 	ticketBucketVersion - 1:         ticketBucketUpgrade,
-	slip0044CoinTypeVersion - 1:     slip0044CoinTypeUpgrade,
-	hasExpiryVersion - 1:            hasExpiryUpgrade,
-	hasExpiryFixedVersion - 1:       hasExpiryFixedUpgrade,
 }
 
-func lastUsedAddressIndexUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte) error {
+func lastUsedAddressIndexUpgrade(tx walletdb.ReadWriteTx, publicPassphrase, privatePassphrase []byte) error {
 	const oldVersion = 1
 	const newVersion = 2
 
@@ -120,33 +93,54 @@ func lastUsedAddressIndexUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byt
 		return err
 	}
 	if dbVersion != oldVersion {
-		return errors.E(errors.Invalid, "lastUsedAddressIndexUpgrade inappropriately called")
+		const str = "lastUsedAddressIndexUpgrade inappropriately called"
+		return apperrors.E{ErrorCode: apperrors.ErrUpgrade, Description: str, Err: nil}
 	}
 
-	masterKeyPubParams, _, err := fetchMasterKeyParams(addrmgrBucket)
+	masterKeyPubParams, masterKeyPrivParams, err := fetchMasterKeyParams(addrmgrBucket)
 	if err != nil {
 		return err
 	}
-	var masterKeyPub snacl.SecretKey
+	var masterKeyPub, masterKeyPriv snacl.SecretKey
 	err = masterKeyPub.Unmarshal(masterKeyPubParams)
 	if err != nil {
-		return errors.E(errors.IO, errors.Errorf("unmarshal master pubkey params: %v", err))
+		const str = "failed to unmarshal master public key parameters"
+		return apperrors.E{ErrorCode: apperrors.ErrData, Description: str, Err: err}
+	}
+	err = masterKeyPriv.Unmarshal(masterKeyPrivParams)
+	if err != nil {
+		const str = "failed to unmarshal master private key parameters"
+		return apperrors.E{ErrorCode: apperrors.ErrData, Description: str, Err: err}
 	}
 	err = masterKeyPub.DeriveKey(&publicPassphrase)
 	if err != nil {
-		return errors.E(errors.Passphrase, "incorrect public passphrase")
+		str := "invalid passphrase for master public key"
+		return apperrors.E{ErrorCode: apperrors.ErrWrongPassphrase, Description: str, Err: nil}
 	}
 
-	cryptoPubKeyEnc, _, _, err := fetchCryptoKeys(addrmgrBucket)
+	err = masterKeyPriv.DeriveKey(&privatePassphrase)
+	if err != nil {
+		str := "invalid passphrase for master private key"
+		return apperrors.E{ErrorCode: apperrors.ErrWrongPassphrase, Description: str, Err: nil}
+	}
+	cryptoPubKeyEnc, cryptoPrivKeyEnc, _, err := fetchCryptoKeys(addrmgrBucket)
 	if err != nil {
 		return err
 	}
 	cryptoPubKeyCT, err := masterKeyPub.Decrypt(cryptoPubKeyEnc)
 	if err != nil {
-		return errors.E(errors.Crypto, errors.Errorf("decrypt public crypto key: %v", err))
+		const str = "failed to decrypt public data crypto key using master key"
+		return apperrors.E{ErrorCode: apperrors.ErrCrypto, Description: str, Err: err}
+	}
+	cryptoPrivKeyCT, err := masterKeyPriv.Decrypt(cryptoPrivKeyEnc)
+	if err != nil {
+		const str = "failed to decrypt private data crypto key using master key"
+		return apperrors.E{ErrorCode: apperrors.ErrCrypto, Description: str, Err: err}
 	}
 	cryptoPubKey := &cryptoKey{snacl.CryptoKey{}}
+	cryptoPrivKey := &cryptoKey{snacl.CryptoKey{}}
 	copy(cryptoPubKey.CryptoKey[:], cryptoPubKeyCT)
+	copy(cryptoPrivKey.CryptoKey[:], cryptoPrivKeyCT)
 
 	// Determine how many BIP0044 accounts have been created.  Each of these
 	// accounts must be updated.
@@ -167,19 +161,48 @@ func lastUsedAddressIndexUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byt
 		// and each branch key.
 		serializedKeyPub, err := cryptoPubKey.Decrypt(row.pubKeyEncrypted)
 		if err != nil {
-			return errors.E(errors.Crypto, errors.Errorf("decrypt extended pubkey: %v", err))
+			const str = "failed to decrypt extended public key"
+			return apperrors.E{ErrorCode: apperrors.ErrCrypto, Description: str, Err: err}
+		}
+		serializedKeyPriv, err := cryptoPrivKey.Decrypt(row.privKeyEncrypted)
+		if err != nil {
+			const str = "failed to decrypt extended private key"
+			return apperrors.E{ErrorCode: apperrors.ErrCrypto, Description: str, Err: err}
 		}
 		xpub, err := hdkeychain.NewKeyFromString(string(serializedKeyPub))
 		if err != nil {
-			return errors.E(errors.IO, err)
+			const str = "failed to create extended public key"
+			return apperrors.E{ErrorCode: apperrors.ErrKeyChain, Description: str, Err: err}
 		}
-		xpubExtBranch, err := xpub.Child(ExternalBranch)
+		xpriv, err := hdkeychain.NewKeyFromString(string(serializedKeyPriv))
 		if err != nil {
-			return err
+			const str = "failed to create extended private key"
+			return apperrors.E{ErrorCode: apperrors.ErrKeyChain, Description: str, Err: err}
 		}
-		xpubIntBranch, err := xpub.Child(InternalBranch)
-		if err != nil {
-			return err
+		var xpubExtBranch, xprivExtBranch, xpubIntBranch, xprivIntBranch *hdkeychain.ExtendedKey
+		if xpub.GetAlgType() == AcctypeEc {
+			xpubExtBranch, err = xpub.Child(ExternalBranch)
+			if err != nil {
+				const str = "failed to derive external branch extended public key"
+				return apperrors.E{ErrorCode: apperrors.ErrKeyChain, Description: str, Err: err}
+			}
+			xpubIntBranch, err = xpub.Child(InternalBranch)
+			if err != nil {
+				const str = "failed to derive internal branch extended public key"
+				return apperrors.E{ErrorCode: apperrors.ErrKeyChain, Description: str, Err: err}
+			}
+		}
+		if xpub.GetAlgType() == AcctypeBliss {
+			xprivExtBranch, err = xpriv.Child(ExternalBranch)
+			if err != nil {
+				const str = "failed to derive external branch extended private key"
+				return apperrors.E{ErrorCode: apperrors.ErrKeyChain, Description: str, Err: err}
+			}
+			xprivIntBranch, err = xpriv.Child(InternalBranch)
+			if err != nil {
+				const str = "failed to derive internal branch extended private key"
+				return apperrors.E{ErrorCode: apperrors.ErrKeyChain, Description: str, Err: err}
+			}
 		}
 
 		// Determine the last used internal and external address indexes.  The
@@ -187,19 +210,38 @@ func lastUsedAddressIndexUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byt
 		lastUsedExtIndex := ^uint32(0)
 		lastUsedIntIndex := ^uint32(0)
 		for child := uint32(0); child < hdkeychain.HardenedKeyStart; child++ {
-			xpubChild, err := xpubExtBranch.Child(child)
-			if err == hdkeychain.ErrInvalidChild {
-				continue
+			var xpubChild, xprivChild *hdkeychain.ExtendedKey
+			if xpub.GetAlgType() == AcctypeEc {
+				xpubChild, err = xpubExtBranch.Child(child)
+				if err == hdkeychain.ErrInvalidChild {
+					continue
+				}
+				if err != nil {
+					const str = "unexpected error deriving child key"
+					return apperrors.E{ErrorCode: apperrors.ErrKeyChain, Description: str, Err: err}
+				}
 			}
-			if err != nil {
-				return err
+			if xpub.GetAlgType() == AcctypeBliss {
+				xprivChild, err = xprivExtBranch.Child(child)
+				if err == hdkeychain.ErrInvalidChild {
+					continue
+				}
+				if err != nil {
+					const str = "unexpected error deriving child key"
+					return apperrors.E{ErrorCode: apperrors.ErrKeyChain, Description: str, Err: err}
+				}
+				xpubChild, err = xprivChild.Neuter()
+				if err != nil {
+					const str = "unexpected error deriving child key"
+					return apperrors.E{ErrorCode: apperrors.ErrKeyChain, Description: str, Err: err}
+				}
 			}
 			// This can't error because the function always passes good input to
 			// dcrutil.NewAddressPubKeyHash.  Also, while it looks like a
 			// mistake to hardcode the mainnet parameters here, it doesn't make
 			// any difference since only the pubkey hash is used.  (Why is there
 			// no exported method to just return the serialized public key?)
-			addr, _ := xpubChild.Address(&chaincfg.MainNetParams)
+			addr, _ := xpubChild.Address(&chaincfg.MainNetParams, xpubChild.GetAlgType())
 			if addressBucket.Get(addressKey(addr.Hash160()[:])) == nil {
 				// No more recorded addresses for this account.
 				break
@@ -210,14 +252,33 @@ func lastUsedAddressIndexUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byt
 		}
 		for child := uint32(0); child < hdkeychain.HardenedKeyStart; child++ {
 			// Same as above but search the internal branch.
-			xpubChild, err := xpubIntBranch.Child(child)
-			if err == hdkeychain.ErrInvalidChild {
-				continue
+			var xpubChild, xprivChild *hdkeychain.ExtendedKey
+			if xpub.GetAlgType() == AcctypeEc {
+				xpubChild, err = xpubIntBranch.Child(child)
+				if err == hdkeychain.ErrInvalidChild {
+					continue
+				}
+				if err != nil {
+					const str = "unexpected error deriving child key"
+					return apperrors.E{ErrorCode: apperrors.ErrKeyChain, Description: str, Err: err}
+				}
 			}
-			if err != nil {
-				return err
+			if xpub.GetAlgType() == AcctypeBliss {
+				xprivChild, err = xprivIntBranch.Child(child)
+				if err == hdkeychain.ErrInvalidChild {
+					continue
+				}
+				if err != nil {
+					const str = "unexpected error deriving child key"
+					return apperrors.E{ErrorCode: apperrors.ErrKeyChain, Description: str, Err: err}
+				}
+				xpubChild, err = xprivChild.Neuter()
+				if err != nil {
+					const str = "unexpected error deriving child key"
+					return apperrors.E{ErrorCode: apperrors.ErrKeyChain, Description: str, Err: err}
+				}
 			}
-			addr, _ := xpubChild.Address(&chaincfg.MainNetParams)
+			addr, _ := xpubChild.Address(&chaincfg.MainNetParams, xpubChild.GetAlgType())
 			if addressBucket.Get(addressKey(addr.Hash160()[:])) == nil {
 				break
 			}
@@ -229,7 +290,7 @@ func lastUsedAddressIndexUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byt
 		// Convert account row values to the new serialization format that
 		// replaces the next to use indexes with the last used indexes.
 		row = bip0044AccountInfo(row.pubKeyEncrypted, row.privKeyEncrypted,
-			0, 0, lastUsedExtIndex, lastUsedIntIndex, 0, 0, row.name, newVersion)
+			0, 0, lastUsedExtIndex, lastUsedIntIndex, 0, 0, row.name, row.acctType, newVersion)
 		err = putAccountInfo(addrmgrBucket, account, row)
 		if err != nil {
 			return err
@@ -250,14 +311,15 @@ func lastUsedAddressIndexUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byt
 	// Remove the used address tracking bucket.
 	err = addrmgrBucket.DeleteNestedBucket(usedAddrBucketName)
 	if err != nil {
-		return errors.E(errors.IO, err)
+		const str = "failed to remove used address tracking bucket"
+		return apperrors.E{ErrorCode: apperrors.ErrDatabase, Description: str, Err: err}
 	}
 
 	// Write the new database version.
 	return unifiedDBMetadata{}.putVersion(metadataBucket, newVersion)
 }
 
-func votingPreferencesUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte) error {
+func votingPreferencesUpgrade(tx walletdb.ReadWriteTx, publicPassphrase, privatePassphrase []byte) error {
 	const oldVersion = 2
 	const newVersion = 3
 
@@ -271,7 +333,8 @@ func votingPreferencesUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte) 
 		return err
 	}
 	if dbVersion != oldVersion {
-		return errors.E(errors.Invalid, "votingPreferencesUpgrade inappropriately called")
+		const str = "votingPreferencesUpgrade inappropriately called"
+		return apperrors.E{ErrorCode: apperrors.ErrUpgrade, Description: str, Err: nil}
 	}
 
 	// Update every ticket purchase with the new database version.  This removes
@@ -304,7 +367,7 @@ func votingPreferencesUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte) 
 	return unifiedDBMetadata{}.putVersion(metadataBucket, newVersion)
 }
 
-func noEncryptedSeedUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte) error {
+func noEncryptedSeedUpgrade(tx walletdb.ReadWriteTx, publicPassphrase, privatePassphrase []byte) error {
 	const oldVersion = 3
 	const newVersion = 4
 
@@ -318,7 +381,8 @@ func noEncryptedSeedUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte) er
 		return err
 	}
 	if dbVersion != oldVersion {
-		return errors.E(errors.Invalid, "noEncryptedSeedUpgrade inappropriately called")
+		const str = "noEncryptedSeedUpgrade inappropriately called"
+		return apperrors.E{ErrorCode: apperrors.ErrUpgrade, Description: str, Err: nil}
 	}
 
 	// Remove encrypted seed (or encrypted zeros).
@@ -331,7 +395,7 @@ func noEncryptedSeedUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte) er
 	return unifiedDBMetadata{}.putVersion(metadataBucket, newVersion)
 }
 
-func lastReturnedAddressUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte) error {
+func lastReturnedAddressUpgrade(tx walletdb.ReadWriteTx, publicPassphrase, privatePassphrase []byte) error {
 	const oldVersion = 4
 	const newVersion = 5
 
@@ -344,7 +408,8 @@ func lastReturnedAddressUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte
 		return err
 	}
 	if dbVersion != oldVersion {
-		return errors.E(errors.Invalid, "accountAddressCursorsUpgrade inappropriately called")
+		const str = "accountAddressCursorsUpgrade inappropriately called"
+		return apperrors.E{ErrorCode: apperrors.ErrUpgrade, Description: str, Err: nil}
 	}
 
 	upgradeAcct := func(account uint32) error {
@@ -360,7 +425,7 @@ func lastReturnedAddressUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte
 		row = bip0044AccountInfo(row.pubKeyEncrypted, row.privKeyEncrypted,
 			0, 0, row.lastUsedExternalIndex, row.lastUsedInternalIndex,
 			row.lastUsedExternalIndex, row.lastUsedInternalIndex,
-			row.name, newVersion)
+			row.name, row.acctType, newVersion)
 		return putAccountInfo(addrmgrBucket, account, row)
 	}
 
@@ -392,7 +457,7 @@ func lastReturnedAddressUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte
 	return unifiedDBMetadata{}.putVersion(metadataBucket, newVersion)
 }
 
-func ticketBucketUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte) error {
+func ticketBucketUpgrade(tx walletdb.ReadWriteTx, publicPassphrase, privatePassphrase []byte) error {
 	const oldVersion = 5
 	const newVersion = 6
 
@@ -405,7 +470,8 @@ func ticketBucketUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte) error
 		return err
 	}
 	if dbVersion != oldVersion {
-		return errors.E(errors.Invalid, "ticketBucketUpgrade inappropriately called")
+		const str = "ticketBucketUpgrade inappropriately called"
+		return apperrors.E{ErrorCode: apperrors.ErrUpgrade, Description: str, Err: nil}
 	}
 
 	// Create the tickets bucket.
@@ -469,224 +535,9 @@ func ticketBucketUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte) error
 	return unifiedDBMetadata{}.putVersion(metadataBucket, newVersion)
 }
 
-func slip0044CoinTypeUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte) error {
-	const oldVersion = 6
-	const newVersion = 7
-
-	metadataBucket := tx.ReadWriteBucket(unifiedDBMetadata{}.rootBucketKey())
-
-	// Assert that this function is only called on version 6 databases.
-	dbVersion, err := unifiedDBMetadata{}.getVersion(metadataBucket)
-	if err != nil {
-		return err
-	}
-	if dbVersion != oldVersion {
-		return errors.E(errors.Invalid, "slip0044CoinTypeUpgrade inappropriately called")
-	}
-
-	// Write the new database version.
-	return unifiedDBMetadata{}.putVersion(metadataBucket, newVersion)
-}
-
-func hasExpiryUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte) error {
-	const oldVersion = 7
-	const newVersion = 8
-	metadataBucket := tx.ReadWriteBucket(unifiedDBMetadata{}.rootBucketKey())
-	txmgrBucket := tx.ReadWriteBucket(wtxmgrBucketKey)
-
-	// Assert this function is only called on version 7 databases.
-	dbVersion, err := unifiedDBMetadata{}.getVersion(metadataBucket)
-	if err != nil {
-		return err
-	}
-	if dbVersion != oldVersion {
-		return errors.E(errors.Invalid, "hasExpiryUpgrade inappropriately called")
-	}
-
-	// Iterate through all mined credits
-	creditsBucket := txmgrBucket.NestedReadWriteBucket(bucketCredits)
-	cursor := creditsBucket.ReadWriteCursor()
-	creditsKV := map[string][]byte{}
-	for k, v := cursor.First(); v != nil; k, v = cursor.Next() {
-		hash := extractRawCreditTxHash(k)
-		block, err := fetchBlockRecord(txmgrBucket, extractRawCreditHeight(k))
-		if err != nil {
-			return err
-		}
-
-		_, recV := existsTxRecord(txmgrBucket, &hash, &block.Block)
-		record := &TxRecord{}
-		err = readRawTxRecord(&hash, recV, record)
-		if err != nil {
-			return err
-		}
-
-		// Only save credits that need their hasExpiry flag updated
-		if record.MsgTx.Expiry != wire.NoExpiryValue {
-			vCpy := make([]byte, len(v))
-			copy(vCpy, v)
-
-			vCpy[8] |= 1 << 4
-			creditsKV[string(k)] = vCpy
-		}
-	}
-
-	for k, v := range creditsKV {
-		err = creditsBucket.Put([]byte(k), v)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Iterate through all unmined credits
-	unminedCreditsBucket := txmgrBucket.NestedReadWriteBucket(bucketUnminedCredits)
-	unminedCursor := unminedCreditsBucket.ReadWriteCursor()
-	unminedCreditsKV := map[string][]byte{}
-	for k, v := unminedCursor.First(); v != nil; k, v = unminedCursor.Next() {
-		hash, err := chainhash.NewHash(extractRawUnminedCreditTxHash(k))
-		if err != nil {
-			return err
-		}
-
-		recV := existsRawUnmined(txmgrBucket, hash[:])
-		record := &TxRecord{}
-		err = readRawTxRecord(hash, recV, record)
-		if err != nil {
-			return err
-		}
-
-		// Only save credits that need their hasExpiry flag updated
-		if record.MsgTx.Expiry != wire.NoExpiryValue {
-			vCpy := make([]byte, len(v))
-			copy(vCpy, v)
-
-			vCpy[8] |= 1 << 4
-			unminedCreditsKV[string(k)] = vCpy
-		}
-	}
-
-	for k, v := range unminedCreditsKV {
-		err = unminedCreditsBucket.Put([]byte(k), v)
-		if err != nil {
-			return err
-		}
-	}
-
-	return unifiedDBMetadata{}.putVersion(metadataBucket, newVersion)
-}
-
-func hasExpiryFixedUpgrade(tx walletdb.ReadWriteTx, publicPassphrase []byte) error {
-	const oldVersion = 8
-	const newVersion = 9
-	metadataBucket := tx.ReadWriteBucket(unifiedDBMetadata{}.rootBucketKey())
-	txmgrBucket := tx.ReadWriteBucket(wtxmgrBucketKey)
-
-	// Assert this function is only called on version 8 databases.
-	dbVersion, err := unifiedDBMetadata{}.getVersion(metadataBucket)
-	if err != nil {
-		return err
-	}
-	if dbVersion != oldVersion {
-		return errors.E(errors.Invalid, "hasExpiryFixedUpgrade inappropriately called")
-	}
-
-	// Iterate through all mined credits
-	creditsBucket := txmgrBucket.NestedReadWriteBucket(bucketCredits)
-	cursor := creditsBucket.ReadCursor()
-	creditsKV := map[string][]byte{}
-	for k, v := cursor.First(); v != nil; k, v = cursor.Next() {
-		hash := extractRawCreditTxHash(k)
-		block, err := fetchBlockRecord(txmgrBucket, extractRawCreditHeight(k))
-		if err != nil {
-			return err
-		}
-
-		_, recV := existsTxRecord(txmgrBucket, &hash, &block.Block)
-		record := &TxRecord{}
-		err = readRawTxRecord(&hash, recV, record)
-		if err != nil {
-			return err
-		}
-
-		// Only save credits that need their hasExpiry flag updated
-		if record.MsgTx.Expiry != wire.NoExpiryValue {
-			vCpy := make([]byte, len(v))
-			copy(vCpy, v)
-
-			vCpy[8] &^= 1 << 4 // Clear bad hasExpiry/OP_SSTXCHANGE flag
-			vCpy[8] |= 1 << 6  // Set correct hasExpiry flag
-			// Reset OP_SSTXCHANGE flag if this is a ticket purchase
-			// OP_SSTXCHANGE output.
-			out := record.MsgTx.TxOut[extractRawCreditIndex(k)]
-			if stake.IsSStx(&record.MsgTx) &&
-				txscript.GetScriptClass(out.Version, out.PkScript) == txscript.StakeSubChangeTy {
-				vCpy[8] |= 1 << 4
-			}
-
-			creditsKV[string(k)] = vCpy
-		}
-	}
-
-	for k, v := range creditsKV {
-		err = creditsBucket.Put([]byte(k), v)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Iterate through all unmined credits
-	unminedCreditsBucket := txmgrBucket.NestedReadWriteBucket(bucketUnminedCredits)
-	unminedCursor := unminedCreditsBucket.ReadCursor()
-	unminedCreditsKV := map[string][]byte{}
-	for k, v := unminedCursor.First(); v != nil; k, v = unminedCursor.Next() {
-		hash, err := chainhash.NewHash(extractRawUnminedCreditTxHash(k))
-		if err != nil {
-			return err
-		}
-
-		recV := existsRawUnmined(txmgrBucket, hash[:])
-		record := &TxRecord{}
-		err = readRawTxRecord(hash, recV, record)
-		if err != nil {
-			return err
-		}
-
-		// Only save credits that need their hasExpiry flag updated
-		if record.MsgTx.Expiry != wire.NoExpiryValue {
-			vCpy := make([]byte, len(v))
-			copy(vCpy, v)
-
-			vCpy[8] &^= 1 << 4 // Clear bad hasExpiry/OP_SSTXCHANGE flag
-			vCpy[8] |= 1 << 6  // Set correct hasExpiry flag
-			// Reset OP_SSTXCHANGE flag if this is a ticket purchase
-			// OP_SSTXCHANGE output.
-			idx, err := fetchRawUnminedCreditIndex(k)
-			if err != nil {
-				return err
-			}
-			out := record.MsgTx.TxOut[idx]
-			if stake.IsSStx(&record.MsgTx) &&
-				txscript.GetScriptClass(out.Version, out.PkScript) == txscript.StakeSubChangeTy {
-				vCpy[8] |= 1 << 4
-			}
-
-			unminedCreditsKV[string(k)] = vCpy
-		}
-	}
-
-	for k, v := range unminedCreditsKV {
-		err = unminedCreditsBucket.Put([]byte(k), v)
-		if err != nil {
-			return err
-		}
-	}
-
-	return unifiedDBMetadata{}.putVersion(metadataBucket, newVersion)
-}
-
 // Upgrade checks whether the any upgrades are necessary before the database is
 // ready for application usage.  If any are, they are performed.
-func Upgrade(db walletdb.DB, publicPassphrase []byte) error {
+func Upgrade(db walletdb.DB, publicPassphrase, privPhrasePassphrase []byte) error {
 	var version uint32
 	err := walletdb.View(db, func(tx walletdb.ReadTx) error {
 		var err error
@@ -694,13 +545,19 @@ func Upgrade(db walletdb.DB, publicPassphrase []byte) error {
 		if metadataBucket == nil {
 			// This could indicate either an unitialized db or one that hasn't
 			// yet been migrated.
-			return errors.E(errors.IO, "missing metadata bucket")
+			const str = "metadata bucket missing"
+			return apperrors.E{ErrorCode: apperrors.ErrNoExist, Description: str, Err: nil}
 		}
 		version, err = unifiedDBMetadata{}.getVersion(metadataBucket)
 		return err
 	})
-	if err != nil {
+	switch err.(type) {
+	case nil:
+	case apperrors.E:
 		return err
+	default:
+		const str = "db view failed"
+		return apperrors.E{ErrorCode: apperrors.ErrDatabase, Description: str, Err: err}
 	}
 
 	if version >= DBVersion {
@@ -710,14 +567,23 @@ func Upgrade(db walletdb.DB, publicPassphrase []byte) error {
 
 	log.Infof("Upgrading database from version %d to %d", version, DBVersion)
 
-	return walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
+	err = walletdb.Update(db, func(tx walletdb.ReadWriteTx) error {
 		// Execute all necessary upgrades in order.
 		for _, upgrade := range upgrades[version:] {
-			err := upgrade(tx, publicPassphrase)
+			err := upgrade(tx, publicPassphrase, privPhrasePassphrase)
 			if err != nil {
 				return err
 			}
 		}
 		return nil
 	})
+	switch err.(type) {
+	case nil:
+		return nil
+	case apperrors.E:
+		return err
+	default:
+		const str = "db update failed"
+		return apperrors.E{ErrorCode: apperrors.ErrDatabase, Description: str, Err: err}
+	}
 }

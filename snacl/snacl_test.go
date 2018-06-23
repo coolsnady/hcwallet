@@ -7,8 +7,6 @@ package snacl
 import (
 	"bytes"
 	"testing"
-
-	"github.com/coolsnady/hxwallet/errors"
 )
 
 var (
@@ -57,7 +55,7 @@ func TestUnmarshalSecretKeyInvalid(t *testing.T) {
 	}
 
 	p := []byte("wrong password")
-	if err := sk.DeriveKey(&p); !errors.Is(errors.Passphrase, err) {
+	if err := sk.DeriveKey(&p); err != ErrInvalidPassword {
 		t.Errorf("wrong password didn't fail")
 		return
 	}
@@ -112,7 +110,7 @@ func TestDeriveKey(t *testing.T) {
 
 func TestDeriveKeyInvalid(t *testing.T) {
 	bogusPass := []byte("bogus")
-	if err := key.DeriveKey(&bogusPass); !errors.Is(errors.Passphrase, err) {
+	if err := key.DeriveKey(&bogusPass); err != ErrInvalidPassword {
 		t.Errorf("unexpected DeriveKey key failure: %v", err)
 	}
 }
