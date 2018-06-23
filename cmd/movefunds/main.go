@@ -28,7 +28,7 @@ import (
 
 	"github.com/coolsnady/hxd/chaincfg"
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/dcrjson"
+	"github.com/coolsnady/hxd/hxjson"
 	"github.com/coolsnady/hxd/wire"
 	hxutil "github.com/coolsnady/hxd/hxutil"
 )
@@ -68,7 +68,7 @@ func (e extendedOutPoints) Swap(i, j int) {
 // convertJSONUnspentToOutPoints converts a JSON raw dump from listunspent to
 // a set of UTXOs.
 func convertJSONUnspentToOutPoints(
-	utxos []dcrjson.ListUnspentResult) []*extendedOutPoint {
+	utxos []hxjson.ListUnspentResult) []*extendedOutPoint {
 	var eops []*extendedOutPoint
 	for _, utxo := range utxos {
 		if utxo.TxType == 1 && utxo.Vout == 0 {
@@ -106,7 +106,7 @@ func main() {
 		fmt.Println("error opening unspent file unspent.json", err.Error())
 	}
 
-	var utxos []dcrjson.ListUnspentResult
+	var utxos []hxjson.ListUnspentResult
 
 	jsonParser := json.NewDecoder(unspentFile)
 	if err = jsonParser.Decode(&utxos); err != nil {

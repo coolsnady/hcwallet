@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"time"
 
-	"github.com/coolsnady/hxd/dcrjson"
+	"github.com/coolsnady/hxd/hxjson"
 	hxutil "github.com/coolsnady/hxd/hxutil"
 	"github.com/coolsnady/hxwallet/wallet"
 )
@@ -22,7 +22,7 @@ func (t *TicketPurchaser) ownTicketsInMempool() (int, error) {
 	// Ticket address is specified and may not belong to our own
 	// wallet. Search the mempool directly for the number of tickets.
 	if t.ticketAddress != nil {
-		tiHashes, err := t.dcrdChainSvr.GetRawMempool(dcrjson.GRMTickets)
+		tiHashes, err := t.dcrdChainSvr.GetRawMempool(hxjson.GRMTickets)
 		if err != nil {
 			return 0, err
 		}

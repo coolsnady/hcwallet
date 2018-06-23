@@ -17,7 +17,7 @@ import (
 	"github.com/coolsnady/hxd/chaincfg"
 	"github.com/coolsnady/hxd/chaincfg/chainec"
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/dcrjson"
+	"github.com/coolsnady/hxd/hxjson"
 	"github.com/coolsnady/hxd/mempool"
 	"github.com/coolsnady/hxd/txscript"
 	"github.com/coolsnady/hxd/wire"
@@ -300,7 +300,7 @@ func (w *Wallet) insertIntoTxMgr(ns walletdb.ReadWriteBucket, msgTx *wire.MsgTx)
 	// Create transaction record and insert into the db.
 	rec, err := udb.NewTxRecordFromMsgTx(msgTx, time.Now())
 	if err != nil {
-		return nil, dcrjson.ErrInternal
+		return nil, hxjson.ErrInternal
 	}
 
 	return rec, w.TxStore.InsertMemPoolTx(ns, rec)
@@ -1290,8 +1290,8 @@ func (w *Wallet) purchaseTickets(req purchaseTicketRequest) ([]*chainhash.Hash, 
 // block hash) Utxo.  ErrInsufficientFunds is returned if there are not
 // enough eligible unspent outputs to create the transaction.
 func (w *Wallet) txToSStx(pair map[string]hxutil.Amount,
-	inputCredits []udb.Credit, inputs []dcrjson.SStxInput,
-	payouts []dcrjson.SStxCommitOut, account uint32, minconf int32) (*CreatedTx, error) {
+	inputCredits []udb.Credit, inputs []hxjson.SStxInput,
+	payouts []hxjson.SStxCommitOut, account uint32, minconf int32) (*CreatedTx, error) {
 
 	var tx *CreatedTx
 	err := walletdb.Update(w.db, func(dbtx walletdb.ReadWriteTx) error {
@@ -1304,8 +1304,8 @@ func (w *Wallet) txToSStx(pair map[string]hxutil.Amount,
 }
 
 func (w *Wallet) txToSStxInternal(dbtx walletdb.ReadWriteTx, pair map[string]hxutil.Amount,
-	inputCredits []udb.Credit, inputs []dcrjson.SStxInput,
-	payouts []dcrjson.SStxCommitOut) (tx *CreatedTx, err error) {
+	inputCredits []udb.Credit, inputs []hxjson.SStxInput,
+	payouts []hxjson.SStxCommitOut) (tx *CreatedTx, err error) {
 
 	// Quit if the blockchain is reorganizing.
 	w.reorganizingLock.Lock()
@@ -1349,13 +1349,13 @@ func (w *Wallet) txToSStxInternal(dbtx walletdb.ReadWriteTx, pair map[string]hxu
 	for _, input := range inputs {
 		txHash, err := chainhash.NewHashFromStr(input.Txid)
 		if err != nil {
-			return nil, dcrjson.ErrDecodeHexString
+			return nil, hxjson.ErrDecodeHexString
 		}
 
 		if !(input.Tree == wire.TxTreeRegular ||
 			input.Tree == wire.TxTreeStake) {
-			return nil, dcrjson.Error{
-				Code:    dcrjson.ErrInvalidParameter.Code,
+			return nil, hxjson.Error{
+				Code:    hxjson.ErrInvalidParameter.Code,
 				Message: "Invalid parameter, tx tree must be regular or stake",
 			}
 		}
@@ -1395,7 +1395,7 @@ func (w *Wallet) txToSStxInternal(dbtx walletdb.ReadWriteTx, pair map[string]hxu
 			switch addr.(type) {
 			case *hxutil.AddressPubKeyHash:
 			default:
-				return nil, dcrjson.ErrInvalidAddressOrKey
+				return nil, hxjson.ErrInvalidAddressOrKey
 			}
 		}
 
@@ -1437,7 +1437,7 @@ func (w *Wallet) txToSStxInternal(dbtx walletdb.ReadWriteTx, pair map[string]hxu
 			case *hxutil.AddressPubKeyHash:
 			case *hxutil.AddressScriptHash:
 			default:
-				return nil, dcrjson.ErrInvalidAddressOrKey
+				return nil, hxjson.ErrInvalidAddressOrKey
 			}
 			changeAddr = a
 		}

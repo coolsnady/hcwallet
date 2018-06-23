@@ -19,7 +19,7 @@ import (
 	"github.com/coolsnady/hxd/blockchain/stake"
 	"github.com/coolsnady/hxd/chaincfg"
 	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/dcrjson"
+	"github.com/coolsnady/hxd/hxjson"
 	"github.com/coolsnady/hxd/txscript"
 	"github.com/coolsnady/hxd/wire"
 	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
@@ -375,9 +375,9 @@ func testWalletPassphrase(r *Harness, t *testing.T) {
 	// Try incorrect password
 	err = wcl.WalletPassphrase("Wrong Password", 0)
 	// Check for "-14: invalid passphrase for master private key"
-	if err != nil && err.(*dcrjson.RPCError).Code !=
-		dcrjson.ErrRPCWalletPassphraseIncorrect {
-		// dcrjson.ErrWalletPassphraseIncorrect.Code
+	if err != nil && err.(*hxjson.RPCError).Code !=
+		hxjson.ErrRPCWalletPassphraseIncorrect {
+		// hxjson.ErrWalletPassphraseIncorrect.Code
 		t.Fatalf("WalletPassphrase with INCORRECT passphrase exited with: %v",
 			err)
 	}
@@ -397,7 +397,7 @@ func testWalletPassphrase(r *Harness, t *testing.T) {
 	if err == nil {
 		t.Fatal("createnewaccount succeeded on a locked wallet.")
 	}
-	// dcrjson.ErrRPCWalletUnlockNeeded
+	// hxjson.ErrRPCWalletUnlockNeeded
 	if !strings.HasPrefix(err.Error(),
 		strconv.Itoa(int(legacyrpc.ErrWalletUnlockNeeded.Code))) {
 		t.Fatalf("createnewaccount returned error (%v) instead of %v",
@@ -422,8 +422,8 @@ func testWalletPassphrase(r *Harness, t *testing.T) {
 	// Check for ErrRPCWalletAlreadyUnlocked
 	err = wcl.WalletPassphrase(defaultWalletPassphrase, 0)
 	// Check for "-17: Wallet is already unlocked"
-	if err != nil && err.(*dcrjson.RPCError).Code !=
-		dcrjson.ErrRPCWalletAlreadyUnlocked {
+	if err != nil && err.(*hxjson.RPCError).Code !=
+		hxjson.ErrRPCWalletAlreadyUnlocked {
 		t.Fatalf("WalletPassphrase failed: %v", err)
 	}
 
@@ -498,7 +498,7 @@ func testGetBalance(r *Harness, t *testing.T) {
 	}
 
 	preAccountBalanceSpendable := 0.0
-	preAccountBalances := make(map[string]dcrjson.GetAccountBalanceResult)
+	preAccountBalances := make(map[string]hxjson.GetAccountBalanceResult)
 	for _, bal := range preBalances.Balances {
 		preAccountBalanceSpendable += bal.Spendable
 		preAccountBalances[bal.AccountName] = bal
@@ -517,7 +517,7 @@ func testGetBalance(r *Harness, t *testing.T) {
 	}
 
 	postAccountBalanceSpendable := 0.0
-	postAccountBalances := make(map[string]dcrjson.GetAccountBalanceResult)
+	postAccountBalances := make(map[string]hxjson.GetAccountBalanceResult)
 	for _, bal := range postBalances.Balances {
 		postAccountBalanceSpendable += bal.Spendable
 		postAccountBalances[bal.AccountName] = bal
@@ -1267,7 +1267,7 @@ func testListTransactions(r *Harness, t *testing.T) {
 	}
 
 	// "regular" not "stake" txtype
-	if *txList1[0].TxType != dcrjson.LTTTRegular {
+	if *txList1[0].TxType != hxjson.LTTTRegular {
 		t.Fatal(`txtype not "regular".`)
 	}
 
@@ -1353,12 +1353,12 @@ func testListTransactions(r *Harness, t *testing.T) {
 
 	// The top of the list should be one send and one receive.  The coinbase
 	// spend should be lower in the list.
-	var sendResult, recvResult dcrjson.ListTransactionsResult
+	var sendResult, recvResult hxjson.ListTransactionsResult
 	if txListAll[0].Category == txListAll[1].Category {
 		t.Fatal("Expected one send and one receive, got two", txListAll[0].Category)
 	}
 	// Use a map since order doesn't matter, and keys are not duplicate
-	rxtxResults := map[string]dcrjson.ListTransactionsResult{
+	rxtxResults := map[string]hxjson.ListTransactionsResult{
 		txListAll[0].Category: txListAll[0],
 		txListAll[1].Category: txListAll[1],
 	}
@@ -2138,7 +2138,7 @@ func testWalletInfo(r *Harness, t *testing.T) {
 ///////////////////////////////////////////////////////////////////////////////
 // Helper functions
 
-func mustGetStakeInfo(wcl *dcrrpcclient.Client, t *testing.T) *dcrjson.GetStakeInfoResult {
+func mustGetStakeInfo(wcl *dcrrpcclient.Client, t *testing.T) *hxjson.GetStakeInfoResult {
 	stakeinfo, err := wcl.GetStakeInfo()
 	if err != nil {
 		t.Fatal("GetStakeInfo failed: ", err)
@@ -2289,7 +2289,7 @@ func getWireMsgTxFee(tx *hxutil.Tx) hxutil.Amount {
 
 // getOutPointString uses OutPoint.String() to combine the tx hash with vout
 // index from a ListUnspentResult.
-func getOutPointString(utxo *dcrjson.ListUnspentResult) (string, error) {
+func getOutPointString(utxo *hxjson.ListUnspentResult) (string, error) {
 	txhash, err := chainhash.NewHashFromStr(utxo.TxID)
 	if err != nil {
 		return "", err
