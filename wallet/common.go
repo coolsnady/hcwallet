@@ -9,7 +9,7 @@ import (
 
 	"github.com/coolsnady/hcd/chaincfg/chainhash"
 	"github.com/coolsnady/hcd/wire"
-	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil"
 )
 
 // Note: The following common types should never reference the Wallet type.
@@ -78,10 +78,10 @@ type P2SHMultiSigOutput struct {
 	// fetching other Transactionoutput data together with the rest of the
 	// multisig info.
 	OutPoint        wire.OutPoint
-	OutputAmount    dcrutil.Amount
+	OutputAmount    hcutil.Amount
 	ContainingBlock BlockIdentity
 
-	P2SHAddress  *dcrutil.AddressScriptHash
+	P2SHAddress  *hcutil.AddressScriptHash
 	RedeemScript []byte
 	M, N         uint8           // M of N signatures required to redeem
 	Redeemer     *OutputRedeemer // nil unless spent

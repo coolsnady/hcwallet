@@ -12,7 +12,7 @@ import (
 
 	"github.com/coolsnady/hcd/blockchain"
 	"github.com/coolsnady/hcd/chaincfg"
-	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil"
 )
 
 // maxPoolFeeRate is the maximum value of the pool fee
@@ -41,8 +41,8 @@ var initSubsidyCacheOnce sync.Once
 //
 // See the included doc.go of this package for more information about the
 // calculation of this fee.
-func StakePoolTicketFee(stakeDiff dcrutil.Amount, relayFee dcrutil.Amount,
-	height int32, poolFee float64, params *chaincfg.Params) dcrutil.Amount {
+func StakePoolTicketFee(stakeDiff hcutil.Amount, relayFee hcutil.Amount,
+	height int32, poolFee float64, params *chaincfg.Params) hcutil.Amount {
 	// Shift the decimal two places, e.g. 1.00%
 	// to 100. This assumes that the proportion
 	// is already multiplied by 100 to give a
@@ -92,5 +92,5 @@ func StakePoolTicketFee(stakeDiff dcrutil.Amount, relayFee dcrutil.Amount,
 	num.Div(num, den)
 	num.Rsh(num, shift)
 
-	return dcrutil.Amount(num.Int64())
+	return hcutil.Amount(num.Int64())
 }

@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/coolsnady/bitset"
-	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil"
 	"github.com/coolsnady/hcutil/hdkeychain"
     hcrpcclient "github.com/coolsnady/hcrpcclient"
 	"github.com/coolsnady/hcwallet/wallet/udb"
@@ -319,7 +319,7 @@ func (w *Wallet) accountUsed(client *hcrpcclient.Client, xpub, xpriv *hdkeychain
 
 func (w *Wallet) branchUsed(client *hcrpcclient.Client, branchXpub, branchXpriv *hdkeychain.ExtendedKey) (bool, error) {
 	var err error
-	addrs := make([]dcrutil.Address, 0, w.gapLimit)
+	addrs := make([]hcutil.Address, 0, w.gapLimit)
 	if branchXpub.GetAlgType() == udb.AcctypeEc {
 		addrs, err = deriveChildAddresses(branchXpub, 0, uint32(2*w.gapLimit), w.chainParams)
 	} else if branchXpub.GetAlgType() == udb.AcctypeBliss {
@@ -353,7 +353,7 @@ func (w *Wallet) findLastUsedAddress(client *hcrpcclient.Client, branchkey *hdke
 Bsearch:
 	for lo <= hi {
 		mid := (hi + lo) / 2
-		addrs := make([]dcrutil.Address, 0)
+		addrs := make([]hcutil.Address, 0)
 		var err error
 		if branchkey.GetAlgType() == udb.AcctypeEc {
 			addrs, err = deriveChildAddresses(branchkey, mid*scanLen, scanLen, w.chainParams)
@@ -386,8 +386,8 @@ Bsearch:
 	return lastUsed, nil
 }
 
-func (w *Wallet) FindactiveAddressesForBliss(account, branch, start, count uint32) ([]dcrutil.Address, error) {
-	addrs := make([]dcrutil.Address, count)
+func (w *Wallet) FindactiveAddressesForBliss(account, branch, start, count uint32) ([]hcutil.Address, error) {
+	addrs := make([]hcutil.Address, count)
 	err := walletdb.Update(w.db, func(tx walletdb.ReadWriteTx) error {
 		var err error
 		addrmgrNs := tx.ReadWriteBucket(waddrmgrNamespaceKey)

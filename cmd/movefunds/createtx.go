@@ -19,11 +19,11 @@ package main
 import (
 	"github.com/coolsnady/hcd/txscript"
 	"github.com/coolsnady/hcd/wire"
-	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil"
 )
 
 // makeTx generates a transaction spending outputs to a single address.
-func makeTx(inputs []*extendedOutPoint, addr dcrutil.Address, txFee int64) (*wire.MsgTx, error) {
+func makeTx(inputs []*extendedOutPoint, addr hcutil.Address, txFee int64) (*wire.MsgTx, error) {
 	mtx := wire.NewMsgTx()
 
 	allInAmts := int64(0)

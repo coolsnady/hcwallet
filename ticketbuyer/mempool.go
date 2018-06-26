@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/coolsnady/hcd/dcrjson"
-	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil"
 	"github.com/coolsnady/hcwallet/wallet"
 )
 
@@ -37,7 +37,7 @@ func (t *TicketPurchaser) ownTicketsInMempool() (int, error) {
 			// Tickets can only pay to a single address. Assume that
 			// the address is on the right network.
 			addrStr := raw.Vout[0].ScriptPubKey.Addresses[0]
-			addr, err := dcrutil.DecodeAddress(addrStr)
+			addr, err := hcutil.DecodeAddress(addrStr)
 			if err != nil {
 				return 0, err
 			}

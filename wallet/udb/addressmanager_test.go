@@ -18,7 +18,7 @@ import (
 	"github.com/coolsnady/hcd/chaincfg"
 	"github.com/coolsnady/hcd/chaincfg/chainec"
 	"github.com/coolsnady/hcd/chaincfg/chainhash"
-	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil"
 	"github.com/coolsnady/hcwallet/apperrors"
 	"github.com/coolsnady/hcwallet/walletdb"
 )
@@ -342,7 +342,7 @@ func testExternalAddresses(tc *testContext) bool {
 		chainParams := tc.manager.ChainParams()
 		for i := 0; i < len(expectedExternalAddrs); i++ {
 			pkHash := expectedExternalAddrs[i].addressHash
-			utilAddr, err := dcrutil.NewAddressPubKeyHash(pkHash,
+			utilAddr, err := hcutil.NewAddressPubKeyHash(pkHash,
 				chainParams, chainec.ECTypeSecp256k1)
 			if err != nil {
 				tc.t.Errorf("%s NewAddressPubKeyHash #%d: "+
@@ -469,7 +469,7 @@ func testInternalAddresses(tc *testContext) bool {
 		chainParams := tc.manager.ChainParams()
 		for i := 0; i < len(expectedInternalAddrs); i++ {
 			pkHash := expectedInternalAddrs[i].addressHash
-			utilAddr, err := dcrutil.NewAddressPubKeyHash(pkHash,
+			utilAddr, err := hcutil.NewAddressPubKeyHash(pkHash,
 				chainParams, chainec.ECTypeSecp256k1)
 			if err != nil {
 				tc.t.Errorf("%s NewAddressPubKeyHash #%d: "+
@@ -651,7 +651,7 @@ func testImportPrivateKey(tc *testContext) bool {
 	if tc.create {
 		for i, test := range tests {
 			test.expected.privKeyWIF = test.in
-			wif, err := dcrutil.DecodeWIF(test.in)
+			wif, err := hcutil.DecodeWIF(test.in)
 			if err != nil {
 				tc.t.Errorf("%s DecodeWIF #%d (%s) (%s): unexpected "+
 					"error: %v", prefix, i, test.in, test.name, err)
@@ -682,7 +682,7 @@ func testImportPrivateKey(tc *testContext) bool {
 
 			// Use the Address API to retrieve each of the expected
 			// new addresses and ensure they're accurate.
-			utilAddr, err := dcrutil.NewAddressPubKeyHash(
+			utilAddr, err := hcutil.NewAddressPubKeyHash(
 				test.expected.addressHash, chainParams, chainec.ECTypeSecp256k1)
 			if err != nil {
 				tc.t.Errorf("%s NewAddressPubKeyHash #%d (%s): "+
@@ -812,7 +812,7 @@ func testImportScript(tc *testContext) bool {
 
 			// Use the Address API to retrieve each of the expected
 			// new addresses and ensure they're accurate.
-			utilAddr, err := dcrutil.NewAddressScriptHash(test.in,
+			utilAddr, err := hcutil.NewAddressScriptHash(test.in,
 				chainParams)
 			if err != nil {
 				tc.t.Errorf("%s NewAddressScriptHash #%d (%s): "+
@@ -895,16 +895,16 @@ func testMarkUsed(tc *testContext) bool {
 	for i, test := range tests {
 		addrHash := test.in
 
-		var addr dcrutil.Address
+		var addr hcutil.Address
 		var err error
 		var testtype string
 		switch test.typ {
 		case addrPubKeyHash:
 			testtype = "addrPubKeyHash"
-			addr, err = dcrutil.NewAddressPubKeyHash(addrHash, chainParams, chainec.ECTypeSecp256k1)
+			addr, err = hcutil.NewAddressPubKeyHash(addrHash, chainParams, chainec.ECTypeSecp256k1)
 		case addrScriptHash:
 			testtype = "addrScriptHash"
-			addr, err = dcrutil.NewAddressScriptHashFromHash(addrHash, chainParams)
+			addr, err = hcutil.NewAddressScriptHashFromHash(addrHash, chainParams)
 		default:
 			panic("unreachable")
 		}
@@ -1173,7 +1173,7 @@ func testLookupAccount(tc *testContext) bool {
 	// Test account lookup for default account adddress
 	var expectedAccount uint32
 	for i, addr := range expectedAddrs {
-		addr, err := dcrutil.NewAddressPubKeyHash(addr.addressHash,
+		addr, err := hcutil.NewAddressPubKeyHash(addr.addressHash,
 			tc.manager.ChainParams(), chainec.ECTypeSecp256k1)
 		if err != nil {
 			tc.t.Errorf("AddrAccount #%d: unexpected error: %v", i, err)

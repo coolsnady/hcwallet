@@ -19,7 +19,7 @@ import (
 	"github.com/coolsnady/hcd/chaincfg/chainhash"
 	"github.com/coolsnady/hcd/txscript"
 	"github.com/coolsnady/hcd/wire"
-	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil"
 	"github.com/coolsnady/hcwallet/apperrors"
 	"github.com/coolsnady/hcwallet/walletdb"
 	"golang.org/x/crypto/ripemd160"
@@ -76,7 +76,7 @@ type indexedIncidence struct {
 type credit struct {
 	outPoint   wire.OutPoint
 	block      Block
-	amount     dcrutil.Amount
+	amount     hcutil.Amount
 	change     bool
 	spentBy    indexedIncidence // Index == ^uint32(0) if unspent
 	opCode     uint8
@@ -143,7 +143,7 @@ type MultisigOut struct {
 	TxHash       chainhash.Hash
 	BlockHash    chainhash.Hash
 	BlockHeight  uint32
-	Amount       dcrutil.Amount
+	Amount       hcutil.Amount
 	Spent        bool
 	SpentBy      chainhash.Hash
 	SpentByIndex uint32
@@ -155,7 +155,7 @@ type MultisigOut struct {
 type Credit struct {
 	wire.OutPoint
 	BlockMeta
-	Amount       dcrutil.Amount
+	Amount       hcutil.Amount
 	PkScript     []byte
 	Received     time.Time
 	FromCoinBase bool
@@ -165,7 +165,7 @@ type Credit struct {
 // transactions.
 type Store struct {
 	chainParams    *chaincfg.Params
-	acctLookupFunc func(walletdb.ReadBucket, dcrutil.Address) (uint32, error)
+	acctLookupFunc func(walletdb.ReadBucket, hcutil.Address) (uint32, error)
 }
 
 // MainChainTip returns the hash and height of the currently marked tip-most
@@ -461,7 +461,7 @@ func stakeValidate(ns walletdb.ReadWriteBucket, height int32) error {
 				return err
 			}
 
-			minedBalance += dcrutil.Amount(output.Value)
+			minedBalance += hcutil.Amount(output.Value)
 		}
 
 		// Move all debits from this tx to the non-invalidated debits bucket,
@@ -600,7 +600,7 @@ func stakeInvalidate(ns walletdb.ReadWriteBucket, height int32) error {
 				return err
 			}
 
-			minedBalance -= dcrutil.Amount(output.Value)
+			minedBalance -= hcutil.Amount(output.Value)
 		}
 
 		// Move all debits from this tx to the invalidated debits bucket, and
@@ -1280,7 +1280,7 @@ func (s *Store) AddCredit(ns walletdb.ReadWriteBucket, rec *TxRecord, block *Blo
 				Index: index,
 			},
 			block:      block.Block,
-			amount:     dcrutil.Amount(rec.MsgTx.TxOut[index].Value),
+			amount:     hcutil.Amount(rec.MsgTx.TxOut[index].Value),
 			change:     change,
 			spentBy:    indexedIncidence{index: ^uint32(0)},
 			opCode:     getP2PKHOpCode(pkScript),
@@ -1379,7 +1379,7 @@ func (s *Store) addCredit(ns walletdb.ReadWriteBucket, rec *TxRecord, block *Blo
 		scrLoc := pkScrLocs[index]
 		scrLen := len(rec.MsgTx.TxOut[index].PkScript)
 
-		v := valueUnminedCredit(dcrutil.Amount(rec.MsgTx.TxOut[index].Value),
+		v := valueUnminedCredit(hcutil.Amount(rec.MsgTx.TxOut[index].Value),
 			change, opCode, isCoinbase, scrType, uint32(scrLoc),
 			uint32(scrLen), account)
 		return true, putRawUnminedCredit(ns, k, v)
@@ -1390,7 +1390,7 @@ func (s *Store) addCredit(ns walletdb.ReadWriteBucket, rec *TxRecord, block *Blo
 		return false, nil
 	}
 
-	txOutAmt := dcrutil.Amount(rec.MsgTx.TxOut[index].Value)
+	txOutAmt := hcutil.Amount(rec.MsgTx.TxOut[index].Value)
 	log.Debugf("Marking transaction %v output %d (%v) spendable",
 		rec.Hash, index, txOutAmt)
 
@@ -1532,7 +1532,7 @@ func (s *Store) addMultisigOut(ns walletdb.ReadWriteBucket, rec *TxRecord,
 		tree,
 		block.Block.Hash,
 		uint32(block.Block.Height),
-		dcrutil.Amount(rec.MsgTx.TxOut[index].Value),
+		hcutil.Amount(rec.MsgTx.TxOut[index].Value),
 		*empty,     // Unspent
 		0xFFFFFFFF, // Unspent
 		rec.Hash)
@@ -1604,7 +1604,7 @@ func (s *Store) Rollback(ns walletdb.ReadWriteBucket, addrmgrNs walletdb.ReadBuc
 }
 
 func approvesParent(voteBits uint16) bool {
-	return dcrutil.IsFlagSet16(voteBits, dcrutil.BlockValid)
+	return hcutil.IsFlagSet16(voteBits, hcutil.BlockValid)
 }
 
 // Note: does not stake validate the parent block at height-1.  Assumes the
@@ -1685,7 +1685,7 @@ func (s *Store) rollback(ns walletdb.ReadWriteBucket, addrmgrNs walletdb.ReadBuc
 					outPointKey := canonicalOutPoint(&rec.Hash, uint32(i))
 					credKey := existsRawUnspent(ns, outPointKey)
 					if credKey != nil {
-						minedBalance -= dcrutil.Amount(output.Value)
+						minedBalance -= hcutil.Amount(output.Value)
 						err = deleteRawUnspent(ns, outPointKey)
 						if err != nil {
 							return err
@@ -1770,7 +1770,7 @@ func (s *Store) rollback(ns walletdb.ReadWriteBucket, addrmgrNs walletdb.ReadBuc
 				// (transactions in the block record are not sorted by
 				// appearence in the block), this credit may have already been
 				// removed.
-				var amt dcrutil.Amount
+				var amt hcutil.Amount
 				amt, err = unspendRawCredit(ns, credKey)
 				if err != nil {
 					return err
@@ -1870,7 +1870,7 @@ func (s *Store) rollback(ns walletdb.ReadWriteBucket, addrmgrNs walletdb.ReadBuc
 					// correcting the balance.
 					isTicketOutput := (txType == stake.TxTypeSStx && i == 0)
 					if !isTicketOutput {
-						minedBalance -= dcrutil.Amount(output.Value)
+						minedBalance -= hcutil.Amount(output.Value)
 					}
 					err = deleteRawUnspent(ns, outPointKey)
 					if err != nil {
@@ -1990,7 +1990,7 @@ func (s *Store) outputCreditInfo(ns walletdb.ReadBucket, op wire.OutPoint,
 	}
 
 	var err error
-	var amt dcrutil.Amount
+	var amt hcutil.Amount
 	var opCode uint8
 	var isCoinbase bool
 	var scrLoc, scrLen uint32
@@ -2443,7 +2443,7 @@ type MultisigCredit struct {
 	MSScript   []byte
 	M          uint8
 	N          uint8
-	Amount     dcrutil.Amount
+	Amount     hcutil.Amount
 }
 
 // GetMultisigCredit takes an outpoint and returns multisignature
@@ -2588,17 +2588,17 @@ func (s *Store) unspentMultisigCredits(ns walletdb.ReadBucket) ([]*MultisigCredi
 // UnspentMultisigCreditsForAddress returns all unspent multisignature P2SH
 // credits in the wallet for some specified address.
 func (s *Store) UnspentMultisigCreditsForAddress(ns walletdb.ReadBucket,
-	addr dcrutil.Address) ([]*MultisigCredit, error) {
+	addr hcutil.Address) ([]*MultisigCredit, error) {
 
 	return s.unspentMultisigCreditsForAddress(ns, addr)
 }
 
 func (s *Store) unspentMultisigCreditsForAddress(ns walletdb.ReadBucket,
-	addr dcrutil.Address) ([]*MultisigCredit, error) {
+	addr hcutil.Address) ([]*MultisigCredit, error) {
 	// Make sure the address is P2SH, then get the
 	// Hash160 for the script from the address.
 	var addrScrHash []byte
-	if sha, ok := addr.(*dcrutil.AddressScriptHash); ok {
+	if sha, ok := addr.(*hcutil.AddressScriptHash); ok {
 		addrScrHash = sha.ScriptAddress()
 	} else {
 		str := "address passed was not a P2SH address"
@@ -2662,7 +2662,7 @@ func (s *Store) unspentMultisigCreditsForAddress(ns walletdb.ReadBucket,
 // amount passed. If not enough funds are found, a nil pointer is returned
 // without error.
 func (s *Store) UnspentOutputsForAmount(ns, addrmgrNs walletdb.ReadBucket,
-	amt dcrutil.Amount, height int32, minConf int32, all bool,
+	amt hcutil.Amount, height int32, minConf int32, all bool,
 	account uint32) ([]*Credit, error) {
 
 	return s.unspentOutputsForAmount(ns, addrmgrNs, amt, height, minConf, all, account)
@@ -2820,12 +2820,12 @@ func (s *Store) minimalCreditToCredit(ns walletdb.ReadBucket,
 // errForEachBreakout is used to break out of a a wallet db ForEach loop.
 var errForEachBreakout = errors.New("forEachBreakout")
 
-func (s *Store) unspentOutputsForAmount(ns, addrmgrNs walletdb.ReadBucket, needed dcrutil.Amount,
+func (s *Store) unspentOutputsForAmount(ns, addrmgrNs walletdb.ReadBucket, needed hcutil.Amount,
 	syncHeight int32, minConf int32, all bool, account uint32) ([]*Credit, error) {
 	var eligible []*minimalCredit
 	var toUse []*minimalCredit
 	var unspent []*Credit
-	found := dcrutil.Amount(0)
+	found := hcutil.Amount(0)
 
 	err := ns.NestedReadBucket(bucketUnspent).ForEach(func(k, v []byte) error {
 		if found >= needed {
@@ -3057,7 +3057,7 @@ func (s *Store) unspentOutputsForAmount(ns, addrmgrNs walletdb.ReadBucket, neede
 // InputSource provides a method (SelectInputs) to incrementally select unspent
 // outputs to use as transaction inputs.
 type InputSource struct {
-	source func(dcrutil.Amount) (dcrutil.Amount, []*wire.TxIn, [][]byte, error)
+	source func(hcutil.Amount) (hcutil.Amount, []*wire.TxIn, [][]byte, error)
 }
 
 // SelectInputs selects transaction inputs to redeem unspent outputs stored in
@@ -3066,7 +3066,7 @@ type InputSource struct {
 // input amount referenced by the previous transaction outputs, a slice of
 // transaction inputs referencing these outputs, and a slice of previous output
 // scripts from each previous output referenced by the corresponding input.
-func (s *InputSource) SelectInputs(target dcrutil.Amount) (dcrutil.Amount, []*wire.TxIn, [][]byte, error) {
+func (s *InputSource) SelectInputs(target hcutil.Amount) (hcutil.Amount, []*wire.TxIn, [][]byte, error) {
 	return s.source(target)
 }
 
@@ -3089,12 +3089,12 @@ func (s *Store) MakeInputSource(ns, addrmgrNs walletdb.ReadBucket, account uint3
 	// Current inputs and their total value.  These are closed over by the
 	// returned input source and reused across multiple calls.
 	var (
-		currentTotal   dcrutil.Amount
+		currentTotal   hcutil.Amount
 		currentInputs  []*wire.TxIn
 		currentScripts [][]byte
 	)
 
-	f := func(target dcrutil.Amount) (dcrutil.Amount, []*wire.TxIn, [][]byte, error) {
+	f := func(target hcutil.Amount) (hcutil.Amount, []*wire.TxIn, [][]byte, error) {
 		for currentTotal < target {
 			var k, v []byte
 			if bucketUnspentCursor == nil {
@@ -3382,13 +3382,13 @@ func (s *Store) balanceFullScan(ns, addrmgrNs walletdb.ReadBucket, minConf int32
 			if err != nil {
 				return err
 			}
-			votingAuthorityAmt := dcrutil.Amount(0)
-			lockedByTicketsAmt := dcrutil.Amount(0)
+			votingAuthorityAmt := hcutil.Amount(0)
+			lockedByTicketsAmt := hcutil.Amount(0)
 
 			// Calculate total input amount which will allow a proper fee calculation.
 			// Fee is needed to be removed from the stake.AmountFromSStxPkScrCommitment
 			// due to the way tickets are constructed and rewards are calculated.
-			totalInputAmount := dcrutil.Amount(0)
+			totalInputAmount := hcutil.Amount(0)
 			for i := range rec.MsgTx.TxIn {
 				_, credKey, err := existsDebit(ns,
 					&txHash, uint32(i), &blockRec.Block)
@@ -3431,7 +3431,7 @@ func (s *Store) balanceFullScan(ns, addrmgrNs walletdb.ReadBucket, minConf int32
 			}
 			// Calculate the fee here due to the commitamt in the OP_SSTX output script being the total
 			// value in.
-			fee := dcrutil.Amount(0)
+			fee := hcutil.Amount(0)
 			if totalInputAmount > 0 {
 				fee = totalInputAmount - utxoAmt
 			}
@@ -3524,13 +3524,13 @@ func (s *Store) balanceFullScan(ns, addrmgrNs walletdb.ReadBucket, minConf int32
 			if err != nil {
 				return err
 			}
-			votingAuthorityAmt := dcrutil.Amount(0)
-			lockedByTicketsAmt := dcrutil.Amount(0)
+			votingAuthorityAmt := hcutil.Amount(0)
+			lockedByTicketsAmt := hcutil.Amount(0)
 
 			// Calculate total input amount which will allow a proper fee calculation.
 			// Fee is needed to be removed from the stake.AmountFromSStxPkScrCommitment
 			// due to the way tickets are constructed and rewards are calculated.
-			totalInputAmount := dcrutil.Amount(0)
+			totalInputAmount := hcutil.Amount(0)
 			for _, txin := range rec.MsgTx.TxIn {
 				rawUnmined := existsRawUnmined(ns, txin.PreviousOutPoint.Hash[:])
 				if rawUnmined != nil {
@@ -3541,7 +3541,7 @@ func (s *Store) balanceFullScan(ns, addrmgrNs walletdb.ReadBucket, minConf int32
 						return err
 					}
 					if int(txin.PreviousOutPoint.Index) < len(tx.TxOut) {
-						totalInputAmount += dcrutil.Amount(tx.TxOut[txin.PreviousOutPoint.Index].Value)
+						totalInputAmount += hcutil.Amount(tx.TxOut[txin.PreviousOutPoint.Index].Value)
 					}
 				} else {
 					_, txVal := latestTxRecord(ns, txin.PreviousOutPoint.Hash[:])
@@ -3554,7 +3554,7 @@ func (s *Store) balanceFullScan(ns, addrmgrNs walletdb.ReadBucket, minConf int32
 						return err
 					}
 					if int(txin.PreviousOutPoint.Index) < len(tx.TxOut) {
-						totalInputAmount += dcrutil.Amount(tx.TxOut[txin.PreviousOutPoint.Index].Value)
+						totalInputAmount += hcutil.Amount(tx.TxOut[txin.PreviousOutPoint.Index].Value)
 					}
 				}
 			}
@@ -3581,7 +3581,7 @@ func (s *Store) balanceFullScan(ns, addrmgrNs walletdb.ReadBucket, minConf int32
 			}
 			// Calculate the fee here due to the commitamt in the OP_SSTX output script being the total
 			// value in.
-			fee := dcrutil.Amount(0)
+			fee := hcutil.Amount(0)
 			if totalInputAmount > 0 {
 				fee = totalInputAmount - utxoAmt
 			}
@@ -3613,13 +3613,13 @@ func (s *Store) balanceFullScan(ns, addrmgrNs walletdb.ReadBucket, minConf int32
 // Balances is an convenience type.
 type Balances struct {
 	Account                 uint32
-	ImmatureCoinbaseRewards dcrutil.Amount
-	ImmatureStakeGeneration dcrutil.Amount
-	LockedByTickets         dcrutil.Amount
-	Spendable               dcrutil.Amount
-	Total                   dcrutil.Amount
-	VotingAuthority         dcrutil.Amount
-	Unconfirmed             dcrutil.Amount
+	ImmatureCoinbaseRewards hcutil.Amount
+	ImmatureStakeGeneration hcutil.Amount
+	LockedByTickets         hcutil.Amount
+	Spendable               hcutil.Amount
+	Total                   hcutil.Amount
+	VotingAuthority         hcutil.Amount
+	Unconfirmed             hcutil.Amount
 }
 
 // AccountBalance returns a Balances struct for some given account at

@@ -7,7 +7,7 @@ import (
 	"github.com/coolsnady/hcd/blockchain"
 	"github.com/coolsnady/hcd/txscript"
 	"github.com/coolsnady/hcd/wire"
-	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil"
 	"github.com/coolsnady/hcwallet/apperrors"
 	"github.com/coolsnady/hcwallet/wallet/udb"
 	"github.com/coolsnady/hcwallet/walletdb"
@@ -100,7 +100,7 @@ func (w *Wallet) UnspentOutputs(policy OutputSelectionPolicy) ([]*TransactionOut
 // transaction outputs, a slice of transaction inputs referencing these outputs,
 // and a slice of previous output scripts from each previous output referenced
 // by the corresponding input.
-func (w *Wallet) SelectInputs(targetAmount dcrutil.Amount, policy OutputSelectionPolicy) (total dcrutil.Amount,
+func (w *Wallet) SelectInputs(targetAmount hcutil.Amount, policy OutputSelectionPolicy) (total hcutil.Amount,
 	inputs []*wire.TxIn, prevScripts [][]byte, err error) {
 
 	err = walletdb.View(w.db, func(tx walletdb.ReadTx) error {
@@ -134,7 +134,7 @@ func (w *Wallet) SelectInputs(targetAmount dcrutil.Amount, policy OutputSelectio
 // using an outpoint.
 type OutputInfo struct {
 	Received     time.Time
-	Amount       dcrutil.Amount
+	Amount       hcutil.Amount
 	FromCoinbase bool
 }
 
@@ -155,7 +155,7 @@ func (w *Wallet) OutputInfo(op *wire.OutPoint) (OutputInfo, error) {
 		}
 
 		info.Received = txDetails.Received
-		info.Amount = dcrutil.Amount(txDetails.TxRecord.MsgTx.TxOut[op.Index].Value)
+		info.Amount = hcutil.Amount(txDetails.TxRecord.MsgTx.TxOut[op.Index].Value)
 		info.FromCoinbase = blockchain.IsCoinBaseTx(&txDetails.TxRecord.MsgTx)
 		return nil
 	})

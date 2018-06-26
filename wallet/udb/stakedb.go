@@ -14,7 +14,7 @@ import (
 	"github.com/coolsnady/hcd/blockchain/stake"
 	"github.com/coolsnady/hcd/chaincfg/chainhash"
 	"github.com/coolsnady/hcd/wire"
-	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil"
 	"github.com/coolsnady/hcwallet/apperrors"
 	"github.com/coolsnady/hcwallet/walletdb"
 )
@@ -140,9 +140,9 @@ func deserializeSStxRecord(serializedSStxRecord []byte, dbVersion uint32) (*sstx
 			return nil, err
 		}
 
-		// Create and save the dcrutil.Tx of the read MsgTx and set its index.
-		tx := dcrutil.NewTx(msgTx)
-		tx.SetIndex(dcrutil.TxIndexUnknown)
+		// Create and save the hcutil.Tx of the read MsgTx and set its index.
+		tx := hcutil.NewTx(msgTx)
+		tx.SetIndex(hcutil.TxIndexUnknown)
 		tx.SetTree(wire.TxTreeStake)
 		record.tx = tx
 
@@ -164,7 +164,7 @@ func deserializeSStxRecord(serializedSStxRecord []byte, dbVersion uint32) (*sstx
 			return nil, err
 		}
 		unixTime := int64(binary.LittleEndian.Uint64(serializedSStxRecord[tx.SerializeSize():]))
-		return &sstxRecord{tx: dcrutil.NewTx(&tx), ts: time.Unix(unixTime, 0)}, nil
+		return &sstxRecord{tx: hcutil.NewTx(&tx), ts: time.Unix(unixTime, 0)}, nil
 
 	default:
 		panic("unreachable")

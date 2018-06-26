@@ -12,7 +12,7 @@ import (
 
 	"github.com/coolsnady/hcd/chaincfg"
 	hcrpcclient "github.com/coolsnady/hcrpcclient"
-	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil"
 	"github.com/coolsnady/hcwallet/ticketbuyer"
 	"github.com/coolsnady/hcwallet/wallet"
 	"github.com/coolsnady/hcwallet/walletdb"
@@ -53,8 +53,8 @@ type StakeOptions struct {
 	VotingEnabled           bool
 	TicketFee               float64
 	AddressReuse            bool
-	TicketAddress           dcrutil.Address
-	PoolAddress             dcrutil.Address
+	TicketAddress           hcutil.Address
+	PoolAddress             hcutil.Address
 	PoolFees                float64
 	StakePoolColdExtKey     string
 }

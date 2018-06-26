@@ -37,7 +37,7 @@ import (
 	"github.com/coolsnady/hcd/txscript"
 	"github.com/coolsnady/hcd/wire"
 	hcrpcclient "github.com/coolsnady/hcrpcclient"
-	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil"
 	"github.com/coolsnady/hcutil/hdkeychain"
 	"github.com/coolsnady/hcwallet/apperrors"
 	"github.com/coolsnady/hcwallet/chain"
@@ -124,9 +124,9 @@ func errorCode(err error) codes.Code {
 
 // decodeAddress decodes an address and verifies it is intended for the active
 // network.  This should be used preferred to direct usage of
-// dcrutil.DecodeAddress, which does not perform the network check.
-func decodeAddress(a string, params *chaincfg.Params) (dcrutil.Address, error) {
-	addr, err := dcrutil.DecodeAddress(a)
+// hcutil.DecodeAddress, which does not perform the network check.
+func decodeAddress(a string, params *chaincfg.Params) (hcutil.Address, error) {
+	addr, err := hcutil.DecodeAddress(a)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid address %v: %v", a, err)
 	}
@@ -435,7 +435,7 @@ func (s *walletServer) NextAddress(ctx context.Context, req *pb.NextAddressReque
 	}
 
 	var (
-		addr dcrutil.Address
+		addr hcutil.Address
         pubKeyFinal string
 		err  error
         acctType pb.NextAddressResponse_AccountType
@@ -484,7 +484,7 @@ func (s *walletServer) NextAddress(ctx context.Context, req *pb.NextAddressReque
             return nil, translateError(err)
         }
 
-        pubKeyAddr, err := dcrutil.NewAddressBlissPubKey(pubKeyBytes, s.wallet.ChainParams())
+        pubKeyAddr, err := hcutil.NewAddressBlissPubKey(pubKeyBytes, s.wallet.ChainParams())
         if err != nil {
             return nil, translateError(err)
         }
@@ -495,7 +495,7 @@ func (s *walletServer) NextAddress(ctx context.Context, req *pb.NextAddressReque
     	if err != nil {
     		return nil, translateError(err)
     	}
-    	pubKeyAddr, err := dcrutil.NewAddressSecpPubKey(pubKey.Serialize(), s.wallet.ChainParams())
+    	pubKeyAddr, err := hcutil.NewAddressSecpPubKey(pubKey.Serialize(), s.wallet.ChainParams())
     	if err != nil {
     		return nil, translateError(err)
     	}
@@ -515,7 +515,7 @@ func (s *walletServer) ImportPrivateKey(ctx context.Context, req *pb.ImportPriva
 
 	defer zero.Bytes(req.Passphrase)
 
-	wif, err := dcrutil.DecodeWIF(req.PrivateKeyWif)
+	wif, err := hcutil.DecodeWIF(req.PrivateKeyWif)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"Invalid WIF-encoded private key: %v", err)
@@ -626,7 +626,7 @@ func (s *walletServer) ImportScript(ctx context.Context,
 		s.wallet.RescanFromHeight(chainClient, req.ScanFrom)
 	}
 
-	p2sh, err := dcrutil.NewAddressScriptHash(req.Script, s.wallet.ChainParams())
+	p2sh, err := hcutil.NewAddressScriptHash(req.Script, s.wallet.ChainParams())
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -747,7 +747,7 @@ func (s *walletServer) FundTransaction(ctx context.Context, req *pb.FundTransact
 		Account:               req.Account,
 		RequiredConfirmations: req.RequiredConfirmations,
 	}
-	totalAmount, inputs, scripts, err := s.wallet.SelectInputs(dcrutil.Amount(req.TargetAmount), policy)
+	totalAmount, inputs, scripts, err := s.wallet.SelectInputs(hcutil.Amount(req.TargetAmount), policy)
 	// Do not return errors to caller when there was insufficient spendable
 	// outputs available for the target amount.
 	switch err.(type) {
@@ -774,7 +774,7 @@ func (s *walletServer) FundTransaction(ctx context.Context, req *pb.FundTransact
 	}
 
 	var changeScript []byte
-	if req.IncludeChangeScript && totalAmount > dcrutil.Amount(req.TargetAmount) {
+	if req.IncludeChangeScript && totalAmount > hcutil.Amount(req.TargetAmount) {
 		changeAddr, err := s.wallet.NewChangeAddress(req.Account)
 		if err != nil {
 			return nil, translateError(err)
@@ -856,7 +856,7 @@ func (s *walletServer) ConstructTransaction(ctx context.Context, req *pb.Constru
 
 	feePerKb := txrules.DefaultRelayFeePerKb
 	if req.FeePerKb != 0 {
-		feePerKb = dcrutil.Amount(req.FeePerKb)
+		feePerKb = hcutil.Amount(req.FeePerKb)
 	}
 
 	var changeSource txauthor.ChangeSource
@@ -1196,7 +1196,7 @@ func (s *walletServer) PurchaseTickets(ctx context.Context,
 	req *pb.PurchaseTicketsRequest) (*pb.PurchaseTicketsResponse, error) {
 	// Unmarshall the received data and prepare it as input for the ticket
 	// purchase request.
-	spendLimit := dcrutil.Amount(req.SpendLimit)
+	spendLimit := hcutil.Amount(req.SpendLimit)
 	if spendLimit < 0 {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"Negative spend limit given")
@@ -1205,7 +1205,7 @@ func (s *walletServer) PurchaseTickets(ctx context.Context,
 	minConf := int32(req.RequiredConfirmations)
 	params := s.wallet.ChainParams()
 
-	var ticketAddr dcrutil.Address
+	var ticketAddr hcutil.Address
 	var err error
 	if req.TicketAddress != "" {
 		ticketAddr, err = decodeAddress(req.TicketAddress, params)
@@ -1214,7 +1214,7 @@ func (s *walletServer) PurchaseTickets(ctx context.Context,
 		}
 	}
 
-	var poolAddr dcrutil.Address
+	var poolAddr hcutil.Address
 	if req.PoolAddress != "" {
 		poolAddr, err = decodeAddress(req.PoolAddress, params)
 		if err != nil {
@@ -1247,8 +1247,8 @@ func (s *walletServer) PurchaseTickets(ctx context.Context,
 	}
 
 	expiry := int32(req.Expiry)
-	txFee := dcrutil.Amount(req.TxFee)
-	ticketFee := dcrutil.Amount(req.TicketFee)
+	txFee := hcutil.Amount(req.TxFee)
+	ticketFee := hcutil.Amount(req.TicketFee)
 
 	if txFee < 0 || ticketFee < 0 {
 		return nil, status.Errorf(codes.InvalidArgument,
@@ -1335,8 +1335,8 @@ func (s *walletServer) SignMessage(cts context.Context, req *pb.SignMessageReque
 	// Addresses must have an associated secp256k1 private key and therefore
 	// must be P2PK or P2PKH (P2SH is not allowed).
 	switch a := addr.(type) {
-	case *dcrutil.AddressSecpPubKey:
-	case *dcrutil.AddressPubKeyHash:
+	case *hcutil.AddressSecpPubKey:
+	case *hcutil.AddressPubKeyHash:
 		if a.DSA(a.Net()) != chainec.ECTypeSecp256k1 {
 			goto WrongAddrKind
 		}
@@ -1399,14 +1399,14 @@ func (s *walletServer) ValidateAddress(ctx context.Context, req *pb.ValidateAddr
 			return nil, err
 		}
 		if len(pubKeyBytes) == 897 {
-			pubKeyAddr, err := dcrutil.NewAddressBlissPubKey(pubKeyBytes,
+			pubKeyAddr, err := hcutil.NewAddressBlissPubKey(pubKeyBytes,
 				s.wallet.ChainParams())
 			if err != nil {
 				return nil, err
 			}
 			result.PubKeyAddr = pubKeyAddr.String()
 		} else {
-			pubKeyAddr, err := dcrutil.NewAddressSecpPubKey(pubKeyBytes,
+			pubKeyAddr, err := hcutil.NewAddressSecpPubKey(pubKeyBytes,
 				s.wallet.ChainParams())
 			if err != nil {
 				return nil, err
@@ -1758,7 +1758,7 @@ func (t *ticketbuyerServer) StartAutoBuyer(ctx context.Context, req *pb.StartAut
 	}
 	params := wallet.ChainParams()
 
-	var votingAddress dcrutil.Address
+	var votingAddress hcutil.Address
 	if req.VotingAddress != "" {
 		votingAddress, err = decodeAddress(req.VotingAddress, params)
 		if err != nil {
@@ -1766,7 +1766,7 @@ func (t *ticketbuyerServer) StartAutoBuyer(ctx context.Context, req *pb.StartAut
 		}
 	}
 
-	var poolAddress dcrutil.Address
+	var poolAddress hcutil.Address
 	if req.PoolAddress != "" {
 		poolAddress, err = decodeAddress(req.PoolAddress, params)
 		if err != nil {
@@ -2426,7 +2426,7 @@ func (s *messageVerificationServer) VerifyMessage(ctx context.Context, req *pb.V
 
 	var valid bool
 
-	addr, err := dcrutil.DecodeAddress(req.Address)
+	addr, err := hcutil.DecodeAddress(req.Address)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -2434,8 +2434,8 @@ func (s *messageVerificationServer) VerifyMessage(ctx context.Context, req *pb.V
 	// Addresses must have an associated secp256k1 private key and therefore
 	// must be P2PK or P2PKH (P2SH is not allowed).
 	switch a := addr.(type) {
-	case *dcrutil.AddressSecpPubKey:
-	case *dcrutil.AddressPubKeyHash:
+	case *hcutil.AddressSecpPubKey:
+	case *hcutil.AddressPubKeyHash:
 		if a.DSA(a.Net()) != chainec.ECTypeSecp256k1 {
 			goto WrongAddrKind
 		}
@@ -2496,11 +2496,11 @@ func marshalDecodedTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params) []*p
 		// the case of stake submission transactions, the odd outputs
 		// contain a commitment address, so detect that case
 		// accordingly.
-		var addrs []dcrutil.Address
+		var addrs []hcutil.Address
 		var encodedAddrs []string
 		var scriptClass txscript.ScriptClass
 		var reqSigs int
-		var commitAmt *dcrutil.Amount
+		var commitAmt *hcutil.Amount
 
 		if (txType == stake.TxTypeSStx) && (stake.IsStakeSubmissionTxOut(i)) {
 

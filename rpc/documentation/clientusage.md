@@ -57,10 +57,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"github.com/decred/dcrutil"
+	"github.com/coolsnady/hcutil"
 )
 
-var certificateFile = filepath.Join(dcrutil.AppDataDir("dcrwallet", false), "rpc.cert")
+var certificateFile = filepath.Join(hcutil.AppDataDir("dcrwallet", false), "rpc.cert")
 
 func main() {
 	creds, err := credentials.NewClientTLSFromFile(certificateFile, "localhost")
@@ -86,7 +86,7 @@ func main() {
 		return
 	}
 
-	fmt.Println("Spendable balance: ", dcrutil.Amount(balanceResponse.Spendable))
+	fmt.Println("Spendable balance: ", hcutil.Amount(balanceResponse.Spendable))
 }
 ```
 

@@ -10,7 +10,7 @@ import (
 	"github.com/coolsnady/hcd/chaincfg/chainec"
 	"github.com/coolsnady/hcd/txscript"
 	"github.com/coolsnady/hcd/wire"
-	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil"
 	"github.com/coolsnady/hcwallet/apperrors"
 	"github.com/coolsnady/hcwallet/wallet/udb"
 	"github.com/coolsnady/hcwallet/walletdb"
@@ -23,8 +23,8 @@ import (
 //
 // This function only works with secp256k1 pubkeys and P2PKH addresses derived
 // from them.
-func (w *Wallet) MakeSecp256k1MultiSigScript(secp256k1Addrs []dcrutil.Address, nRequired int) ([]byte, error) {
-	secp256k1PubKeys := make([]*dcrutil.AddressSecpPubKey, len(secp256k1Addrs))
+func (w *Wallet) MakeSecp256k1MultiSigScript(secp256k1Addrs []hcutil.Address, nRequired int) ([]byte, error) {
+	secp256k1PubKeys := make([]*hcutil.AddressSecpPubKey, len(secp256k1Addrs))
 
 	var dbtx walletdb.ReadTx
 	var addrmgrNs walletdb.ReadBucket
@@ -43,10 +43,10 @@ func (w *Wallet) MakeSecp256k1MultiSigScript(secp256k1Addrs []dcrutil.Address, n
 			return nil, errors.New("cannot make multisig script for " +
 				"a non-secp256k1 public key or P2PKH address")
 
-		case *dcrutil.AddressSecpPubKey:
+		case *hcutil.AddressSecpPubKey:
 			secp256k1PubKeys[i] = addr
 
-		case *dcrutil.AddressPubKeyHash:
+		case *hcutil.AddressPubKeyHash:
 			if addr.DSA(w.chainParams) != chainec.ECTypeSecp256k1 {
 				return nil, errors.New("cannot make multisig " +
 					"script for a non-secp256k1 P2PKH address")
@@ -67,7 +67,7 @@ func (w *Wallet) MakeSecp256k1MultiSigScript(secp256k1Addrs []dcrutil.Address, n
 			serializedPubKey := addrInfo.(udb.ManagedPubKeyAddress).
 				PubKey().Serialize()
 
-			pubKeyAddr, err := dcrutil.NewAddressSecpPubKey(
+			pubKeyAddr, err := hcutil.NewAddressSecpPubKey(
 				serializedPubKey, w.chainParams)
 			if err != nil {
 				return nil, err
@@ -80,8 +80,8 @@ func (w *Wallet) MakeSecp256k1MultiSigScript(secp256k1Addrs []dcrutil.Address, n
 }
 
 // ImportP2SHRedeemScript adds a P2SH redeem script to the wallet.
-func (w *Wallet) ImportP2SHRedeemScript(script []byte) (*dcrutil.AddressScriptHash, error) {
-	var p2shAddr *dcrutil.AddressScriptHash
+func (w *Wallet) ImportP2SHRedeemScript(script []byte) (*hcutil.AddressScriptHash, error) {
+	var p2shAddr *hcutil.AddressScriptHash
 	err := walletdb.Update(w.db, func(tx walletdb.ReadWriteTx) error {
 		addrmgrNs := tx.ReadWriteBucket(waddrmgrNamespaceKey)
 		txmgrNs := tx.ReadWriteBucket(wtxmgrNamespaceKey)
@@ -99,14 +99,14 @@ func (w *Wallet) ImportP2SHRedeemScript(script []byte) (*dcrutil.AddressScriptHa
 			if apperrors.IsError(err, apperrors.ErrDuplicateAddress) {
 				// This function will never error as it always
 				// hashes the script to the correct length.
-				p2shAddr, _ = dcrutil.NewAddressScriptHash(script,
+				p2shAddr, _ = hcutil.NewAddressScriptHash(script,
 					w.chainParams)
 				return nil
 			}
 			return err
 		}
 
-		p2shAddr = addrInfo.Address().(*dcrutil.AddressScriptHash)
+		p2shAddr = addrInfo.Address().(*hcutil.AddressScriptHash)
 		return nil
 	})
 	return p2shAddr, err
@@ -144,7 +144,7 @@ func (w *Wallet) FetchP2SHMultiSigOutput(outPoint *wire.OutPoint) (*P2SHMultiSig
 		return nil, err
 	}
 
-	p2shAddr, err := dcrutil.NewAddressScriptHashFromHash(
+	p2shAddr, err := hcutil.NewAddressScriptHashFromHash(
 		mso.ScriptHash[:], w.chainParams)
 	if err != nil {
 		return nil, err

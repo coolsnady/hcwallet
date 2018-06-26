@@ -15,7 +15,7 @@ import (
 	"github.com/coolsnady/hcd/chaincfg/chainhash"
 	"github.com/coolsnady/hcd/txscript"
 	"github.com/coolsnady/hcd/wire"
-	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil"
 	"github.com/coolsnady/hcwallet/apperrors"
 	"github.com/coolsnady/hcwallet/chain"
 	"github.com/coolsnady/hcwallet/wallet/txrules"
@@ -331,7 +331,7 @@ func (w *Wallet) handleReorganizing(oldHash, newHash *chainhash.Hash, oldHeight,
 // acceptable to the stake pool. The ticket must pay out to the stake
 // pool cold wallet, and must have a sufficient fee.
 func (w *Wallet) evaluateStakePoolTicket(rec *udb.TxRecord,
-	blockHeight int32, poolUser dcrutil.Address) (bool, error) {
+	blockHeight int32, poolUser hcutil.Address) (bool, error) {
 	tx := rec.MsgTx
 
 	// Check the first commitment output (txOuts[1])
@@ -348,7 +348,7 @@ func (w *Wallet) evaluateStakePoolTicket(rec *udb.TxRecord,
 	}
 
 	// Extract the fee from the ticket.
-	in := dcrutil.Amount(0)
+	in := hcutil.Amount(0)
 	for i := range tx.TxOut {
 		if i%2 != 0 {
 			commitAmt, err := stake.AmountFromSStxPkScrCommitment(
@@ -360,9 +360,9 @@ func (w *Wallet) evaluateStakePoolTicket(rec *udb.TxRecord,
 			in += commitAmt
 		}
 	}
-	out := dcrutil.Amount(0)
+	out := hcutil.Amount(0)
 	for i := range tx.TxOut {
-		out += dcrutil.Amount(tx.TxOut[i].Value)
+		out += hcutil.Amount(tx.TxOut[i].Value)
 	}
 	fees := in - out
 
@@ -377,7 +377,7 @@ func (w *Wallet) evaluateStakePoolTicket(rec *udb.TxRecord,
 
 		// Calculate the fee required based on the current
 		// height and the required amount from the pool.
-		feeNeeded := txrules.StakePoolTicketFee(dcrutil.Amount(
+		feeNeeded := txrules.StakePoolTicketFee(hcutil.Amount(
 			tx.TxOut[0].Value), fees, blockHeight, w.PoolFees(),
 			w.ChainParams())
 		if commitAmt < feeNeeded {
@@ -515,7 +515,7 @@ func (w *Wallet) processTransactionRecord(dbtx walletdb.ReadWriteTx, rec *udb.Tx
 		}
 
 		if insert {
-			err := w.StakeMgr.InsertSStx(stakemgrNs, dcrutil.NewTx(&rec.MsgTx))
+			err := w.StakeMgr.InsertSStx(stakemgrNs, hcutil.NewTx(&rec.MsgTx))
 			if err != nil {
 				log.Errorf("Failed to insert SStx %v"+
 					"into the stake store.", &rec.Hash)
@@ -676,7 +676,7 @@ func (w *Wallet) processTransactionRecord(dbtx walletdb.ReadWriteTx, rec *udb.Tx
 					chainClient := w.ChainClient()
 					if chainClient != nil {
 						err := chainClient.LoadTxFilter(false,
-							[]dcrutil.Address{mscriptaddr.Address()}, nil)
+							[]hcutil.Address{mscriptaddr.Address()}, nil)
 						if err != nil {
 							return err
 						}

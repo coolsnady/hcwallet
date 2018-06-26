@@ -12,7 +12,7 @@ import (
 
 	"github.com/coolsnady/hcd/chaincfg"
 	//hcrpcclient "github.com/coolsnady/hcrpcclient"
-	//dcrutil "github.com/coolsnady/hcutil"
+	//"github.com/coolsnady/hcutil"
 	//"github.com/coolsnady/hcwallet/rpc/legacyrpc"
 	"github.com/coolsnady/hcwallet/rpctest"
 )

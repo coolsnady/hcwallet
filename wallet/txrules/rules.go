@@ -10,16 +10,16 @@ import (
 
 	"github.com/coolsnady/hcd/txscript"
 	"github.com/coolsnady/hcd/wire"
-	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil"
 )
 
 // DefaultRelayFeePerKb is the default minimum relay fee policy for a mempool.
-const DefaultRelayFeePerKb dcrutil.Amount = 1e5
+const DefaultRelayFeePerKb hcutil.Amount = 1e5
 
 // IsDustAmount determines whether a transaction output value and script length would
 // cause the output to be considered dust.  Transactions with dust outputs are
 // not standard and are rejected by mempools with default policies.
-func IsDustAmount(amount dcrutil.Amount, scriptSize int, relayFeePerKb dcrutil.Amount) bool {
+func IsDustAmount(amount hcutil.Amount, scriptSize int, relayFeePerKb hcutil.Amount) bool {
 	// Calculate the total (estimated) cost to the network.  This is
 	// calculated using the serialize size of the output plus the serial
 	// size of a transaction input which redeems it.  The output is assumed
@@ -37,7 +37,7 @@ func IsDustAmount(amount dcrutil.Amount, scriptSize int, relayFeePerKb dcrutil.A
 // IsDustOutput determines whether a transaction output is considered dust.
 // Transactions with dust outputs are not standard and are rejected by mempools
 // with default policies.
-func IsDustOutput(output *wire.TxOut, relayFeePerKb dcrutil.Amount) bool {
+func IsDustOutput(output *wire.TxOut, relayFeePerKb hcutil.Amount) bool {
 	// Unspendable outputs which solely carry data are not checked for dust.
 	if txscript.GetScriptClass(output.Version, output.PkScript) == txscript.NullDataTy {
 		return false
@@ -48,7 +48,7 @@ func IsDustOutput(output *wire.TxOut, relayFeePerKb dcrutil.Amount) bool {
 		return true
 	}
 
-	return IsDustAmount(dcrutil.Amount(output.Value), len(output.PkScript),
+	return IsDustAmount(hcutil.Amount(output.Value), len(output.PkScript),
 		relayFeePerKb)
 }
 
@@ -61,11 +61,11 @@ var (
 
 // CheckOutput performs simple consensus and policy tests on a transaction
 // output.
-func CheckOutput(output *wire.TxOut, relayFeePerKb dcrutil.Amount) error {
+func CheckOutput(output *wire.TxOut, relayFeePerKb hcutil.Amount) error {
 	if output.Value < 0 {
 		return ErrAmountNegative
 	}
-	if output.Value > dcrutil.MaxAmount {
+	if output.Value > hcutil.MaxAmount {
 		return ErrAmountExceedsMax
 	}
 	if IsDustOutput(output, relayFeePerKb) {
@@ -76,15 +76,15 @@ func CheckOutput(output *wire.TxOut, relayFeePerKb dcrutil.Amount) error {
 
 // FeeForSerializeSize calculates the required fee for a transaction of some
 // arbitrary size given a mempool's relay fee policy.
-func FeeForSerializeSize(relayFeePerKb dcrutil.Amount, txSerializeSize int) dcrutil.Amount {
-	fee := relayFeePerKb * dcrutil.Amount(txSerializeSize) / 1000
+func FeeForSerializeSize(relayFeePerKb hcutil.Amount, txSerializeSize int) hcutil.Amount {
+	fee := relayFeePerKb * hcutil.Amount(txSerializeSize) / 1000
 
 	if fee == 0 && relayFeePerKb > 0 {
 		fee = relayFeePerKb
 	}
 
-	if fee < 0 || fee > dcrutil.MaxAmount {
-		fee = dcrutil.MaxAmount
+	if fee < 0 || fee > hcutil.MaxAmount {
+		fee = hcutil.MaxAmount
 	}
 
 	return fee

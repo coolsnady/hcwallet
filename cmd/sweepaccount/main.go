@@ -16,7 +16,7 @@ import (
 	"github.com/coolsnady/hcd/txscript"
 	"github.com/coolsnady/hcd/wire"
 	hcrpcclient "github.com/coolsnady/hcrpcclient"
-	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil"
 	"github.com/coolsnady/hcwallet/internal/cfgutil"
 	"github.com/coolsnady/hcwallet/netparams"
 	"github.com/coolsnady/hcwallet/wallet/txauthor"
@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	walletDataDirectory = dcrutil.AppDataDir("hcwallet", false)
+	walletDataDirectory = hcutil.AppDataDir("hcwallet", false)
 	newlineBytes        = []byte{'\n'}
 )
 
@@ -141,12 +141,12 @@ func (noInputValue) Error() string { return "no input value" }
 // looked up again by the wallet during the call to signrawtransaction.
 func makeInputSource(outputs []dcrjson.ListUnspentResult) txauthor.InputSource {
 	var (
-		totalInputValue dcrutil.Amount
+		totalInputValue hcutil.Amount
 		inputs          = make([]*wire.TxIn, 0, len(outputs))
 		sourceErr       error
 	)
 	for _, output := range outputs {
-		outputAmount, err := dcrutil.NewAmount(output.Amount)
+		outputAmount, err := hcutil.NewAmount(output.Amount)
 		if err != nil {
 			sourceErr = fmt.Errorf(
 				"invalid amount `%v` in listunspent result",
@@ -179,7 +179,7 @@ func makeInputSource(outputs []dcrjson.ListUnspentResult) txauthor.InputSource {
 		sourceErr = noInputValue{}
 	}
 
-	return func(dcrutil.Amount) (dcrutil.Amount, []*wire.TxIn, [][]byte, error) {
+	return func(hcutil.Amount) (hcutil.Amount, []*wire.TxIn, [][]byte, error) {
 		return totalInputValue, inputs, nil, sourceErr
 	}
 }
@@ -259,7 +259,7 @@ func sweep() error {
 		}
 	}
 
-	var totalSwept dcrutil.Amount
+	var totalSwept hcutil.Amount
 	var numErrors int
 	var reportError = func(format string, args ...interface{}) {
 		fmt.Fprintf(os.Stderr, format, args...)
@@ -302,7 +302,7 @@ func sweep() error {
 			continue
 		}
 
-		outputAmount := dcrutil.Amount(tx.Tx.TxOut[0].Value)
+		outputAmount := hcutil.Amount(tx.Tx.TxOut[0].Value)
 		fmt.Printf("Swept %v to destination account with transaction %v\n",
 			outputAmount, txHash)
 		totalSwept += outputAmount
@@ -332,8 +332,8 @@ func promptSecret(what string) (string, error) {
 	return string(input), nil
 }
 
-func saneOutputValue(amount dcrutil.Amount) bool {
-	return amount >= 0 && amount <= dcrutil.MaxAmount
+func saneOutputValue(amount hcutil.Amount) bool {
+	return amount >= 0 && amount <= hcutil.MaxAmount
 }
 
 func parseOutPoint(input *dcrjson.ListUnspentResult) (wire.OutPoint, error) {

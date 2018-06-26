@@ -16,7 +16,7 @@ import (
 	"strings"
 
 	"github.com/btcsuite/btclog"
-	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil"
 	"github.com/coolsnady/hcwallet/internal/cfgutil"
 	"github.com/coolsnady/hcwallet/netparams"
 	"github.com/coolsnady/hcwallet/ticketbuyer"
@@ -48,8 +48,8 @@ const (
 	defaultAllowHighFees       = false
 
 	// ticket buyer options
-	defaultMaxFee                    dcrutil.Amount = 1e6
-	defaultMinFee                    dcrutil.Amount = 1e5
+	defaultMaxFee                    hcutil.Amount = 1e6
+	defaultMinFee                    hcutil.Amount = 1e5
 	defaultMaxPriceScale                            = 0.0
 	defaultAvgVWAPPriceDelta                        = 2880
 	defaultMaxPerBlock                              = 1
@@ -69,8 +69,8 @@ const (
 )
 
 var (
-	dcrdDefaultCAFile  = filepath.Join(dcrutil.AppDataDir("hcd", false), "rpc.cert")
-	defaultAppDataDir  = dcrutil.AppDataDir("hcwallet", false)
+	dcrdDefaultCAFile  = filepath.Join(hcutil.AppDataDir("hcd", false), "rpc.cert")
+	defaultAppDataDir  = hcutil.AppDataDir("hcwallet", false)
 	defaultConfigFile  = filepath.Join(defaultAppDataDir, defaultConfigFilename)
 	defaultRPCKeyFile  = filepath.Join(defaultAppDataDir, "rpc.key")
 	defaultRPCCertFile = filepath.Join(defaultAppDataDir, "rpc.cert")
