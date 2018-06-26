@@ -13,7 +13,7 @@ import (
 	"io"
 	"runtime/debug"
 
-	"github.com/coolsnady/hxwallet/internal/zero"
+	"github.com/coolsnady/hcwallet/internal/zero"
 
 	"golang.org/x/crypto/nacl/secretbox"
 	"golang.org/x/crypto/scrypt"

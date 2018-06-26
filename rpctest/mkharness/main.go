@@ -10,11 +10,11 @@ import (
 	//"strings"
 	//"time"
 
-	"github.com/coolsnady/hxd/chaincfg"
-	//dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
-	//hxutil "github.com/coolsnady/hxd/hxutil"
-	//"github.com/coolsnady/hxwallet/rpc/legacyrpc"
-	"github.com/coolsnady/hxwallet/rpctest"
+	"github.com/coolsnady/hcd/chaincfg"
+	//hcrpcclient "github.com/coolsnady/hcrpcclient"
+	//dcrutil "github.com/coolsnady/hcutil"
+	//"github.com/coolsnady/hcwallet/rpc/legacyrpc"
+	"github.com/coolsnady/hcwallet/rpctest"
 )
 
 func main() {

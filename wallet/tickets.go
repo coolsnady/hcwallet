@@ -7,18 +7,17 @@ package wallet
 import (
 	"encoding/hex"
 	"time"
-	"errors"
 
-	"github.com/hybridnetwork/bitset"
-	"github.com/coolsnady/hxd/blockchain/stake"
-	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/txscript"
-	"github.com/coolsnady/hxd/wire"
-	hxutil "github.com/coolsnady/hxd/hxutil"
-    dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
-	"github.com/coolsnady/hxwallet/apperrors"
-	"github.com/coolsnady/hxwallet/wallet/udb"
-	"github.com/coolsnady/hxwallet/walletdb"
+	"github.com/coolsnady/bitset"
+	"github.com/coolsnady/hcd/blockchain/stake"
+	"github.com/coolsnady/hcd/chaincfg/chainhash"
+	"github.com/coolsnady/hcd/txscript"
+	"github.com/coolsnady/hcd/wire"
+	dcrutil "github.com/coolsnady/hcutil"
+    hcrpcclient "github.com/coolsnady/hcrpcclient"
+	"github.com/coolsnady/hcwallet/apperrors"
+	"github.com/coolsnady/hcwallet/wallet/udb"
+	"github.com/coolsnady/hcwallet/walletdb"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -50,7 +49,7 @@ func (w *Wallet) GenerateVoteTx(blockHash *chainhash.Hash, height int32, ticketH
 
 // LiveTicketHashes returns the hashes of live tickets that the wallet has
 // purchased or has voting authority for.
-func (w *Wallet) LiveTicketHashes(chainClient *dcrrpcclient.Client, includeImmature bool) ([]chainhash.Hash, error) {
+func (w *Wallet) LiveTicketHashes(chainClient *hcrpcclient.Client, includeImmature bool) ([]chainhash.Hash, error) {
 	var ticketHashes []chainhash.Hash
 	var maybeLive []*chainhash.Hash
 
@@ -109,9 +108,9 @@ func (w *Wallet) LiveTicketHashes(chainClient *dcrrpcclient.Client, includeImmat
 	}
 
 	// Determine if the extra tickets are immature or possibly live.  Because
-	// these transactions are not part of the wallet's transaction history, dcrd
+	// these transactions are not part of the wallet's transaction history, hcd
 	// must be queried for their blockchain height.  This functionality requires
-	// the dcrd transaction index to be enabled.
+	// the hcd transaction index to be enabled.
 	var g errgroup.Group
 	type extraTicketResult struct {
 		valid  bool // unspent with known height
@@ -184,7 +183,7 @@ func (w *Wallet) LiveTicketHashes(chainClient *dcrrpcclient.Client, includeImmat
 // TicketHashesForVotingAddress returns the hashes of all tickets with voting
 // rights delegated to votingAddr.  This function does not return the hashes of
 // pruned tickets.
-func (w *Wallet) TicketHashesForVotingAddress(votingAddr hxutil.Address) ([]chainhash.Hash, error) {
+func (w *Wallet) TicketHashesForVotingAddress(votingAddr dcrutil.Address) ([]chainhash.Hash, error) {
 	var ticketHashes []chainhash.Hash
 	err := walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 		stakemgrNs := tx.ReadBucket(wstakemgrNamespaceKey)
@@ -220,7 +219,7 @@ func (w *Wallet) TicketHashesForVotingAddress(votingAddr hxutil.Address) ([]chai
 // updateStakePoolInvalidTicket properly updates a previously marked Invalid pool ticket,
 // it then creates a new entry in the validly tracked pool ticket db.
 func (w *Wallet) updateStakePoolInvalidTicket(stakemgrNs walletdb.ReadWriteBucket,
-	addr hxutil.Address, ticket *chainhash.Hash, ticketHeight int64) error {
+	addr dcrutil.Address, ticket *chainhash.Hash, ticketHeight int64) error {
 
 	err := w.StakeMgr.RemoveStakePoolUserInvalTickets(stakemgrNs, addr, ticket)
 	if err != nil {
@@ -239,16 +238,16 @@ func (w *Wallet) updateStakePoolInvalidTicket(stakemgrNs walletdb.ReadWriteBucke
 // the transaction manager because it is unknown where the transaction belongs
 // on the blockchain.  It will be used to create votes.
 func (w *Wallet) AddTicket(ticket *wire.MsgTx) error {
-	err := stake.CheckSStx(ticket)
+	_, err := stake.IsSStx(ticket)
 	if err != nil {
-		txHash := ticket.TxHash()
-		return errors.New( "wallet.AddTicket"+txHash.String())
+		return err
 	}
+
 	return walletdb.Update(w.db, func(tx walletdb.ReadWriteTx) error {
 		stakemgrNs := tx.ReadWriteBucket(wstakemgrNamespaceKey)
 
 		// Insert the ticket to be tracked and voted.
-		err := w.StakeMgr.InsertSStx(stakemgrNs, hxutil.NewTx(ticket))
+		err := w.StakeMgr.InsertSStx(stakemgrNs, dcrutil.NewTx(ticket))
 		if err != nil {
 			return err
 		}
@@ -290,7 +289,7 @@ func (w *Wallet) AddTicket(ticket *wire.MsgTx) error {
 // RevokeTickets creates and sends revocation transactions for any unrevoked
 // missed and expired tickets.  The wallet must be unlocked to generate any
 // revocations.
-func (w *Wallet) RevokeTickets(chainClient *dcrrpcclient.Client) error {
+func (w *Wallet) RevokeTickets(chainClient *hcrpcclient.Client) error {
 	var ticketHashes []chainhash.Hash
 	var tipHash chainhash.Hash
 	var tipHeight int32

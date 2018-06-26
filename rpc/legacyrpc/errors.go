@@ -6,34 +6,33 @@
 package legacyrpc
 
 import (
-	"fmt"
 	"errors"
 
-	"github.com/coolsnady/hxd/hxjson"
+	"github.com/coolsnady/hcd/dcrjson"
 )
 
 // TODO(jrick): There are several error paths which 'replace' various errors
-// with a more appropiate error from the hxjson package.  Create a map of
+// with a more appropiate error from the dcrjson package.  Create a map of
 // these replacements so they can be handled once after an RPC handler has
 // returned and before the error is marshaled.
 
 // Error types to simplify the reporting of specific categories of
-// errors, and their *hxjson.RPCError creation.
+// errors, and their *dcrjson.RPCError creation.
 type (
 	// DeserializationError describes a failed deserializaion due to bad
-	// user input.  It corresponds to hxjson.ErrRPCDeserialization.
+	// user input.  It corresponds to dcrjson.ErrRPCDeserialization.
 	DeserializationError struct {
 		error
 	}
 
 	// InvalidParameterError describes an invalid parameter passed by
-	// the user.  It corresponds to hxjson.ErrRPCInvalidParameter.
+	// the user.  It corresponds to dcrjson.ErrRPCInvalidParameter.
 	InvalidParameterError struct {
 		error
 	}
 
 	// ParseError describes a failed parse due to bad user input.  It
-	// corresponds to hxjson.ErrRPCParse.
+	// corresponds to dcrjson.ErrRPCParse.
 	ParseError struct {
 		error
 	}
@@ -57,50 +56,43 @@ var (
 		errors.New("minconf must be positive"),
 	}
 
-	ErrAddressNotInWallet = hxjson.RPCError{
-		Code:    hxjson.ErrRPCWallet,
+	ErrAddressNotInWallet = dcrjson.RPCError{
+		Code:    dcrjson.ErrRPCWallet,
 		Message: "address not found in wallet",
 	}
 
-	ErrAccountNameNotFound = hxjson.RPCError{
-		Code:    hxjson.ErrRPCWalletInvalidAccountName,
+	ErrAccountNameNotFound = dcrjson.RPCError{
+		Code:    dcrjson.ErrRPCWalletInvalidAccountName,
 		Message: "account name not found",
 	}
 
-	ErrUnloadedWallet = hxjson.RPCError{
-		Code:    hxjson.ErrRPCWallet,
+	ErrUnloadedWallet = dcrjson.RPCError{
+		Code:    dcrjson.ErrRPCWallet,
 		Message: "Request requires a wallet but wallet has not loaded yet",
 	}
 
-	ErrWalletUnlockNeeded = hxjson.RPCError{
-		Code:    hxjson.ErrRPCWalletUnlockNeeded,
+	ErrWalletUnlockNeeded = dcrjson.RPCError{
+		Code:    dcrjson.ErrRPCWalletUnlockNeeded,
 		Message: "Enter the wallet passphrase with walletpassphrase first",
 	}
 
-	ErrNotImportedAccount = hxjson.RPCError{
-		Code:    hxjson.ErrRPCWallet,
+	ErrNotImportedAccount = dcrjson.RPCError{
+		Code:    dcrjson.ErrRPCWallet,
 		Message: "imported addresses must belong to the imported account",
 	}
 
-	ErrNoTransactionInfo = hxjson.RPCError{
-		Code:    hxjson.ErrRPCNoTxInfo,
+	ErrNoTransactionInfo = dcrjson.RPCError{
+		Code:    dcrjson.ErrRPCNoTxInfo,
 		Message: "No information for transaction",
 	}
 
-	ErrReservedAccountName = hxjson.RPCError{
-		Code:    hxjson.ErrRPCInvalidParameter,
+	ErrReservedAccountName = dcrjson.RPCError{
+		Code:    dcrjson.ErrRPCInvalidParameter,
 		Message: "Account name is reserved by RPC server",
 	}
 
-	ErrMainNetSafety = hxjson.RPCError{
-		Code:    hxjson.ErrRPCWallet,
+	ErrMainNetSafety = dcrjson.RPCError{
+		Code:    dcrjson.ErrRPCWallet,
 		Message: "RPC function disabled on MainNet wallets for security purposes",
 	}
 )
-
-func rpcErrorf(code hxjson.RPCErrorCode, format string, args ...interface{}) *hxjson.RPCError {
-	return &hxjson.RPCError{
-		Code:    code,
-		Message: fmt.Sprintf(format, args...),
-	}
-}

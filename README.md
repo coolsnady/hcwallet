@@ -1,23 +1,23 @@
-hxwallet
+hcwallet
 =========
 
 [![ISC License](http://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
 
-hxwallet is a daemon handling hx wallet functionality for a
-single user.  It acts as both an RPC client to hxd and an RPC server
+hcwallet is a daemon handling hx wallet functionality for a
+single user.  It acts as both an RPC client to hcd and an RPC server
 for wallet clients and legacy RPC applications.
 
 Public and private keys are derived using the hierarchical
 deterministic format described by
 [BIP0032](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki).
 Unencrypted private keys are not supported and are never written to
-disk.  hxwallet uses the
+disk.  hcwallet uses the
 `m/44'/<coin type>'/<account>'/<branch>/<address index>`
 HD path for all derived addresses, as described by
 [BIP0044](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki).
 
 Due to the sensitive nature of public data in a BIP0032 wallet,
-hxwallet provides the option of encrypting not just private keys, but
+hcwallet provides the option of encrypting not just private keys, but
 public data as well.  This is intended to thwart privacy risks where a
 wallet file is compromised without exposing all current and future
 addresses (public keys) managed by the wallet. While access to this
@@ -26,11 +26,11 @@ does mean they could track all transactions involving your addresses
 and therefore know your exact balance.  In a future release, public data
 encryption will extend to transactions as well.
 
-hxwallet is not an SPV client and requires connecting to a local or
-remote hxd instance for asynchronous blockchain queries and
-notifications over websockets.  Full hxd installation instructions
-can be found [here](https://github.com/coolsnady/hxd).  An alternative
-SPV mode that is compatible with hxd is planned for a future release.
+hcwallet is not an SPV client and requires connecting to a local or
+remote hcd instance for asynchronous blockchain queries and
+notifications over websockets.  Full hcd installation instructions
+can be found [here](https://github.com/coolsnady/hcd).  An alternative
+SPV mode that is compatible with hcd is planned for a future release.
 
 Wallet clients can use one of two RPC servers:
 
@@ -46,7 +46,7 @@ Wallet clients can use one of two RPC servers:
 
   2. A gRPC server
 
-     The gRPC server uses a new API built for hxwallet, but the API is not
+     The gRPC server uses a new API built for hcwallet, but the API is not
      stabilized.  This server is enabled by default and may be disabled with
      the config option `--nogrpc`.  If you don't mind applications breaking
      due to API changes, don't want to deal with issues of the legacy API, or
@@ -55,7 +55,7 @@ Wallet clients can use one of two RPC servers:
 
 ## Current State
 
-This project is currently under active development and is in a Beta state. The default branch of hxwallet is currently testnet1. Please make sure to use --testnet flag when running hxwallet and report any issues by using the integrated issue tracker. Do not yet use this software yet as a store of value!
+This project is currently under active development and is in a Beta state. The default branch of hcwallet is currently testnet1. Please make sure to use --testnet flag when running hcwallet and report any issues by using the integrated issue tracker. Do not yet use this software yet as a store of value!
 
 MAKE SURE TO SAVE YOUR WALLET SEED SO YOU CAN RECOVER YOUR KEYS IF THE WALLET FAILS!
 
@@ -89,8 +89,8 @@ For a first time installation, the project and dependency sources can be
 obtained manually with `git` and `glide` (create directories as needed):
 
 ```
-git clone https://github.com/coolsnady/hxwallet $GOPATH/src/github.com/coolsnady/hxwallet
-cd $GOPATH/src/github.com/coolsnady/hxwallet
+git clone https://github.com/coolsnady/hcwallet $GOPATH/src/github.com/coolsnady/hcwallet
+cd $GOPATH/src/github.com/coolsnady/hcwallet
 glide install
 ```
 
@@ -98,7 +98,7 @@ To update an existing source tree, pull the latest changes and install the
 matching dependencies:
 
 ```
-cd $GOPATH/src/github.com/coolsnady/hxwallet
+cd $GOPATH/src/github.com/coolsnady/hcwallet
 git pull
 glide install
 ```
@@ -106,10 +106,10 @@ glide install
 **Building/Installing**:
 
 The `go` tool is used to build or install (to `GOPATH`) the project.  Some
-example build instructions are provided below (all must run from the `hxwallet`
+example build instructions are provided below (all must run from the `hcwallet`
 project directory).
 
-To build and install `hxwallet` and all helper commands (in the `cmd`
+To build and install `hcwallet` and all helper commands (in the `cmd`
 directory) to `$GOPATH/bin/`, as well as installing all compiled packages to
 `$GOPATH/pkg/` (**use this if you are unsure which command to run**):
 
@@ -117,13 +117,13 @@ directory) to `$GOPATH/bin/`, as well as installing all compiled packages to
 go install . ./cmd/...
 ```
 
-To build a `hxwallet` executable and install it to `$GOPATH/bin/`:
+To build a `hcwallet` executable and install it to `$GOPATH/bin/`:
 
 ```
 go install
 ```
 
-To build a `hxwallet` executable and place it in the current directory:
+To build a `hcwallet` executable and place it in the current directory:
 
 ```
 go build
@@ -131,61 +131,61 @@ go build
 
 ## Getting Started
 
-The following instructions detail how to get started with hxwallet connecting
-to a localhost hxd.  Commands should be run in `cmd.exe` or PowerShell on
+The following instructions detail how to get started with hcwallet connecting
+to a localhost hcd.  Commands should be run in `cmd.exe` or PowerShell on
 Windows, or any terminal emulator on *nix.
 
-- Run the following command to start hxd:
+- Run the following command to start hcd:
 
 ```
-hxd -u rpcuser -P rpcpass --testnet
+hcd -u rpcuser -P rpcpass --testnet
 ```
 
 - Run the following command to create a wallet:
 
 ```
-hxwallet -u rpcuser -P rpcpass --testnet --create
+hcwallet -u rpcuser -P rpcpass --testnet --create
 ```
 
-- Run the following command to start hxwallet:
+- Run the following command to start hcwallet:
 
 ```
-hxwallet -u rpcuser -P rpcpass --testnet
+hcwallet -u rpcuser -P rpcpass --testnet
 ```
 
 If everything appears to be working, it is recommended at this point to
-copy the sample hxd and hxwallet configurations and update with your
+copy the sample hcd and hcwallet configurations and update with your
 RPC username and password.
 
 PowerShell (Installed from MSI):
 ```
-PS> cp "$env:ProgramFiles\coolsnady\Hxd\sample-hxd.conf" $env:LOCALAPPDATA\Hxd\hxd.conf
-PS> cp "$env:ProgramFiles\coolsnady\Hxwallet\sample-hxwallet.conf" $env:LOCALAPPDATA\Hxwallet\hxwallet.conf
-PS> $editor $env:LOCALAPPDATA\Hxd\hxd.conf
-PS> $editor $env:LOCALAPPDATA\Hxwallet\hxwallet.conf
+PS> cp "$env:ProgramFiles\coolsnady\Hxd\sample-hcd.conf" $env:LOCALAPPDATA\Hxd\hcd.conf
+PS> cp "$env:ProgramFiles\coolsnady\Hxwallet\sample-hcwallet.conf" $env:LOCALAPPDATA\Hxwallet\hcwallet.conf
+PS> $editor $env:LOCALAPPDATA\Hxd\hcd.conf
+PS> $editor $env:LOCALAPPDATA\Hxwallet\hcwallet.conf
 ```
 
 PowerShell (Installed from source):
 ```
-PS> cp $env:GOPATH\src\github.com\coolsnady\hxd\sample-hxd.conf $env:LOCALAPPDATA\Hxd\hxd.conf
-PS> cp $env:GOPATH\src\github.com\coolsnady\hxwallet\sample-hxwallet.conf $env:LOCALAPPDATA\Hxwallet\hxwallet.conf
-PS> $editor $env:LOCALAPPDATA\Hxd\hxd.conf
-PS> $editor $env:LOCALAPPDATA\Hxwallet\hxwallet.conf
+PS> cp $env:GOPATH\src\github.com\coolsnady\hcd\sample-hcd.conf $env:LOCALAPPDATA\Hxd\hcd.conf
+PS> cp $env:GOPATH\src\github.com\coolsnady\hcwallet\sample-hcwallet.conf $env:LOCALAPPDATA\Hxwallet\hcwallet.conf
+PS> $editor $env:LOCALAPPDATA\Hxd\hcd.conf
+PS> $editor $env:LOCALAPPDATA\Hxwallet\hcwallet.conf
 ```
 
 Linux/BSD/POSIX (Installed from source):
 ```bash
-$ cp $GOPATH/src/github.com/coolsnady/hxd/sample-hxd.conf ~/.hxd/hxd.conf
-$ cp $GOPATH/src/github.com/coolsnady/hxwallet/sample-hxwallet.conf ~/.hxwallet/hxwallet.conf
-$ $EDITOR ~/.hxd/hxd.conf
-$ $EDITOR ~/.hxwallet/hxwallet.conf
+$ cp $GOPATH/src/github.com/coolsnady/hcd/sample-hcd.conf ~/.hcd/hcd.conf
+$ cp $GOPATH/src/github.com/coolsnady/hcwallet/sample-hcwallet.conf ~/.hcwallet/hcwallet.conf
+$ $EDITOR ~/.hcd/hcd.conf
+$ $EDITOR ~/.hcwallet/hcwallet.conf
 ```
 
 ## Issue Tracker
 
-The [integrated github issue tracker](https://github.com/coolsnady/hxwallet/issues)
+The [integrated github issue tracker](https://github.com/coolsnady/hcwallet/issues)
 is used for this project.
 
 ## License
 
-hxwallet is licensed under the liberal ISC License.
+hcwallet is licensed under the liberal ISC License.

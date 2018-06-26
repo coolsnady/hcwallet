@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sort"
 
-	hxutil "github.com/coolsnady/hxd/hxutil"
+	dcrutil "github.com/coolsnady/hcutil"
 )
 
 const (
@@ -21,9 +21,9 @@ const (
 // diffPeriodFee defines some statistics about a difficulty fee period
 // compared to the current difficulty period.
 type diffPeriodFee struct {
-	difficulty hxutil.Amount
-	difference hxutil.Amount // Difference from current difficulty
-	fee        hxutil.Amount
+	difficulty dcrutil.Amount
+	difference dcrutil.Amount // Difference from current difficulty
+	fee        dcrutil.Amount
 }
 
 // diffPeriodFees is slice type definition used to satisfy the sorting
@@ -40,8 +40,8 @@ func (p diffPeriodFees) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
 // from recent blocks to figure out what to set the user's ticket fees to.
 // Instead, it uses data from the last windowsToConsider many windows and
 // takes an average fee from the closest one.
-func (t *TicketPurchaser) findClosestFeeWindows(difficulty hxutil.Amount,
-	useMedian bool) (hxutil.Amount, error) {
+func (t *TicketPurchaser) findClosestFeeWindows(difficulty dcrutil.Amount,
+	useMedian bool) (dcrutil.Amount, error) {
 	wtcUint32 := uint32(windowsToConsider)
 	info, err := t.dcrdChainSvr.TicketFeeInfo(&zeroUint32, &wtcUint32)
 	if err != nil {
@@ -75,13 +75,13 @@ func (t *TicketPurchaser) findClosestFeeWindows(difficulty hxutil.Amount,
 			return 0, err
 		}
 
-		windowDiffAmt := hxutil.Amount(blkHeader.SBits)
+		windowDiffAmt := dcrutil.Amount(blkHeader.SBits)
 
-		var fee hxutil.Amount
+		var fee dcrutil.Amount
 		if !useMedian {
-			fee, err = hxutil.NewAmount(info.FeeInfoWindows[i].Mean)
+			fee, err = dcrutil.NewAmount(info.FeeInfoWindows[i].Mean)
 		} else {
-			fee, err = hxutil.NewAmount(info.FeeInfoWindows[i].Median)
+			fee, err = dcrutil.NewAmount(info.FeeInfoWindows[i].Median)
 		}
 		if err != nil {
 			return 0, err
@@ -119,19 +119,19 @@ func (t *TicketPurchaser) findClosestFeeWindows(difficulty hxutil.Amount,
 
 // findMeanTicketFeeBlocks finds the mean of the mean of fees from BlocksToAvg
 // many blocks using the ticketfeeinfo RPC API.
-func (t *TicketPurchaser) findTicketFeeBlocks(useMedian bool) (hxutil.Amount, error) {
+func (t *TicketPurchaser) findTicketFeeBlocks(useMedian bool) (dcrutil.Amount, error) {
 	btaUint32 := uint32(t.cfg.BlocksToAvg)
 	info, err := t.dcrdChainSvr.TicketFeeInfo(&btaUint32, nil)
 	if err != nil {
 		return 0.0, err
 	}
 
-	var sum, tmp hxutil.Amount
+	var sum, tmp dcrutil.Amount
 	for i := range info.FeeInfoBlocks {
 		if !useMedian {
-			tmp, err = hxutil.NewAmount(info.FeeInfoBlocks[i].Mean)
+			tmp, err = dcrutil.NewAmount(info.FeeInfoBlocks[i].Mean)
 		} else {
-			tmp, err = hxutil.NewAmount(info.FeeInfoBlocks[i].Median)
+			tmp, err = dcrutil.NewAmount(info.FeeInfoBlocks[i].Median)
 		}
 		if err != nil {
 			return 0, err
@@ -139,5 +139,5 @@ func (t *TicketPurchaser) findTicketFeeBlocks(useMedian bool) (hxutil.Amount, er
 		sum += tmp
 	}
 
-	return sum / hxutil.Amount(t.cfg.BlocksToAvg), nil
+	return sum / dcrutil.Amount(t.cfg.BlocksToAvg), nil
 }

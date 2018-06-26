@@ -11,23 +11,23 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/hxjson"
-	"github.com/coolsnady/hxd/txscript"
-	"github.com/coolsnady/hxd/wire"
-	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
-	hxutil "github.com/coolsnady/hxd/hxutil"
-	"github.com/coolsnady/hxwallet/internal/cfgutil"
-	"github.com/coolsnady/hxwallet/netparams"
-	"github.com/coolsnady/hxwallet/wallet/txauthor"
-	"github.com/coolsnady/hxwallet/wallet/txrules"
-	"github.com/coolsnady/hxwallet/wallet/udb"
+	"github.com/coolsnady/hcd/chaincfg/chainhash"
+	"github.com/coolsnady/hcd/dcrjson"
+	"github.com/coolsnady/hcd/txscript"
+	"github.com/coolsnady/hcd/wire"
+	hcrpcclient "github.com/coolsnady/hcrpcclient"
+	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcwallet/internal/cfgutil"
+	"github.com/coolsnady/hcwallet/netparams"
+	"github.com/coolsnady/hcwallet/wallet/txauthor"
+	"github.com/coolsnady/hcwallet/wallet/txrules"
+	"github.com/coolsnady/hcwallet/wallet/udb"
 	"github.com/jessevdk/go-flags"
 	"golang.org/x/crypto/ssh/terminal"
 )
 
 var (
-	walletDataDirectory = hxutil.AppDataDir("hxwallet", false)
+	walletDataDirectory = dcrutil.AppDataDir("hcwallet", false)
 	newlineBytes        = []byte{'\n'}
 )
 
@@ -139,14 +139,14 @@ func (noInputValue) Error() string { return "no input value" }
 // output is consumed.  The InputSource does not return any previous output
 // scripts as they are not needed for creating the unsinged transaction and are
 // looked up again by the wallet during the call to signrawtransaction.
-func makeInputSource(outputs []hxjson.ListUnspentResult) txauthor.InputSource {
+func makeInputSource(outputs []dcrjson.ListUnspentResult) txauthor.InputSource {
 	var (
-		totalInputValue hxutil.Amount
+		totalInputValue dcrutil.Amount
 		inputs          = make([]*wire.TxIn, 0, len(outputs))
 		sourceErr       error
 	)
 	for _, output := range outputs {
-		outputAmount, err := hxutil.NewAmount(output.Amount)
+		outputAmount, err := dcrutil.NewAmount(output.Amount)
 		if err != nil {
 			sourceErr = fmt.Errorf(
 				"invalid amount `%v` in listunspent result",
@@ -179,7 +179,7 @@ func makeInputSource(outputs []hxjson.ListUnspentResult) txauthor.InputSource {
 		sourceErr = noInputValue{}
 	}
 
-	return func(hxutil.Amount) (hxutil.Amount, []*wire.TxIn, [][]byte, error) {
+	return func(dcrutil.Amount) (dcrutil.Amount, []*wire.TxIn, [][]byte, error) {
 		return totalInputValue, inputs, nil, sourceErr
 	}
 }
@@ -187,7 +187,7 @@ func makeInputSource(outputs []hxjson.ListUnspentResult) txauthor.InputSource {
 // makeDestinationScriptSource creates a ChangeSource which is used to receive
 // all correlated previous input value.  A non-change address is created by this
 // function.
-func makeDestinationScriptSource(rpcClient *dcrrpcclient.Client, accountName string) txauthor.ChangeSource {
+func makeDestinationScriptSource(rpcClient *hcrpcclient.Client, accountName string) txauthor.ChangeSource {
 	return func() ([]byte, uint16, error) {
 		destinationAddress, err := rpcClient.GetNewAddress(accountName)
 		if err != nil {
@@ -216,7 +216,7 @@ func sweep() error {
 	if err != nil {
 		return errContext(err, "failed to read RPC certificate")
 	}
-	rpcClient, err := dcrrpcclient.New(&dcrrpcclient.ConnConfig{
+	rpcClient, err := hcrpcclient.New(&hcrpcclient.ConnConfig{
 		Host:         opts.RPCConnect,
 		User:         opts.RPCUsername,
 		Pass:         rpcPassword,
@@ -236,7 +236,7 @@ func sweep() error {
 	if err != nil {
 		return errContext(err, "failed to fetch unspent outputs")
 	}
-	sourceOutputs := make(map[string][]hxjson.ListUnspentResult)
+	sourceOutputs := make(map[string][]dcrjson.ListUnspentResult)
 	for _, unspentOutput := range unspentOutputs {
 		if !unspentOutput.Spendable {
 			continue
@@ -259,7 +259,7 @@ func sweep() error {
 		}
 	}
 
-	var totalSwept hxutil.Amount
+	var totalSwept dcrutil.Amount
 	var numErrors int
 	var reportError = func(format string, args ...interface{}) {
 		fmt.Fprintf(os.Stderr, format, args...)
@@ -302,7 +302,7 @@ func sweep() error {
 			continue
 		}
 
-		outputAmount := hxutil.Amount(tx.Tx.TxOut[0].Value)
+		outputAmount := dcrutil.Amount(tx.Tx.TxOut[0].Value)
 		fmt.Printf("Swept %v to destination account with transaction %v\n",
 			outputAmount, txHash)
 		totalSwept += outputAmount
@@ -332,11 +332,11 @@ func promptSecret(what string) (string, error) {
 	return string(input), nil
 }
 
-func saneOutputValue(amount hxutil.Amount) bool {
-	return amount >= 0 && amount <= hxutil.MaxAmount
+func saneOutputValue(amount dcrutil.Amount) bool {
+	return amount >= 0 && amount <= dcrutil.MaxAmount
 }
 
-func parseOutPoint(input *hxjson.ListUnspentResult) (wire.OutPoint, error) {
+func parseOutPoint(input *dcrjson.ListUnspentResult) (wire.OutPoint, error) {
 	txHash, err := chainhash.NewHashFromStr(input.TxID)
 	if err != nil {
 		return wire.OutPoint{}, err

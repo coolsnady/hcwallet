@@ -14,8 +14,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/coolsnady/hxwallet/walletdb"
-	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
+	"github.com/coolsnady/hcwallet/walletdb"
+	_ "github.com/coolsnady/hcwallet/walletdb/bdb"
 )
 
 // This example demonstrates creating a new database.

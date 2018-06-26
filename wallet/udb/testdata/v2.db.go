@@ -16,15 +16,15 @@ import (
 	"io"
 	"os"
 
-	"github.com/coolsnady/hxd/blockchain/stake"
-	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxd/wire"
-	hxutil "github.com/coolsnady/hxd/hxutil"
-	"github.com/coolsnady/hxd/hdkeychain"
-	"github.com/coolsnady/hxwallet/wallet/udb"
-	"github.com/coolsnady/hxwallet/walletdb"
-	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
-	"github.com/coolsnady/hxwallet/walletseed"
+	"github.com/coolsnady/hcd/blockchain/stake"
+	"github.com/coolsnady/hcd/chaincfg"
+	"github.com/coolsnady/hcd/wire"
+	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil/hdkeychain"
+	"github.com/coolsnady/hcwallet/wallet/udb"
+	"github.com/coolsnady/hcwallet/walletdb"
+	_ "github.com/coolsnady/hcwallet/walletdb/bdb"
+	"github.com/coolsnady/hcwallet/walletseed"
 )
 
 const dbname = "v2.db"
@@ -89,7 +89,7 @@ func setup() error {
 			Bits:         1,
 			ExtendedBits: []byte{0, 0, 0, 4},
 		}
-		return smgr.InsertSStx(ns, hxutil.NewTx(&ticketPurchase), vb)
+		return smgr.InsertSStx(ns, dcrutil.NewTx(&ticketPurchase), vb)
 	})
 }
 

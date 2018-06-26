@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/wire"
-	hxutil "github.com/coolsnady/hxd/hxutil"
+	"github.com/coolsnady/hcd/chaincfg/chainhash"
+	"github.com/coolsnady/hcd/wire"
+	dcrutil "github.com/coolsnady/hcutil"
 )
 
 type queryState struct {
@@ -314,7 +314,7 @@ func TestStoreQueries(t *testing.T) {
 	newState.blocks[0][0].Credits = []CreditRecord{
 		{
 			Index:  0,
-			Amount: hxutil.Amount(recA.MsgTx.TxOut[0].Value),
+			Amount: dcrutil.Amount(recA.MsgTx.TxOut[0].Value),
 			Spent:  false,
 			Change: true,
 		},
@@ -338,7 +338,7 @@ func TestStoreQueries(t *testing.T) {
 		Block:    BlockMeta{Block: Block{Height: -1}},
 		Debits: []DebitRecord{
 			{
-				Amount: hxutil.Amount(recA.MsgTx.TxOut[0].Value),
+				Amount: dcrutil.Amount(recA.MsgTx.TxOut[0].Value),
 				Index:  0, // recB.MsgTx.TxIn index
 			},
 		},
@@ -355,7 +355,7 @@ func TestStoreQueries(t *testing.T) {
 	newState.blocks[0][1].Credits = []CreditRecord{
 		{
 			Index:  0,
-			Amount: hxutil.Amount(recB.MsgTx.TxOut[0].Value),
+			Amount: dcrutil.Amount(recB.MsgTx.TxOut[0].Value),
 			Spent:  false,
 			Change: false,
 		},
@@ -576,12 +576,12 @@ func TestPreviousPkScripts(t *testing.T) {
 				{PreviousOutPoint: wire.OutPoint{
 					Hash:  *prevHash,
 					Index: 0,
-					Tree:  hxutil.TxTreeRegular,
+					Tree:  dcrutil.TxTreeRegular,
 				}},
 				{PreviousOutPoint: wire.OutPoint{
 					Hash:  *prevHash,
 					Index: 1,
-					Tree:  hxutil.TxTreeRegular,
+					Tree:  dcrutil.TxTreeRegular,
 				}},
 			},
 			TxOut: []*wire.TxOut{

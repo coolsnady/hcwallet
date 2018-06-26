@@ -19,8 +19,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/coolsnady/hxd/hxjson"
-	"github.com/coolsnady/hxwallet/internal/rpchelp"
+	"github.com/coolsnady/hcd/dcrjson"
+	"github.com/coolsnady/hcwallet/internal/rpchelp"
 )
 
 func serverMethods() map[string]struct{} {
@@ -55,7 +55,7 @@ func TestRPCMethodHelpGeneration(t *testing.T) {
 		for _, m := range rpchelp.Methods {
 			delete(svrMethods, m.Method)
 
-			helpText, err := hxjson.GenerateHelp(m.Method, rpchelp.HelpDescs[i].Descs, m.ResultTypes...)
+			helpText, err := dcrjson.GenerateHelp(m.Method, rpchelp.HelpDescs[i].Descs, m.ResultTypes...)
 			if err != nil {
 				t.Errorf("Cannot generate '%s' help for method '%s': missing description for '%s'",
 					locale, m.Method, err)
@@ -92,7 +92,7 @@ func TestRPCMethodUsageGeneration(t *testing.T) {
 	for _, m := range rpchelp.Methods {
 		delete(svrMethods, m.Method)
 
-		usage, err := hxjson.MethodUsageText(m.Method)
+		usage, err := dcrjson.MethodUsageText(m.Method)
 		if err != nil {
 			t.Errorf("Cannot generate single line usage for method '%s': %v",
 				m.Method, err)

@@ -11,12 +11,12 @@ import (
 	"io"
 	"time"
 
-	"github.com/coolsnady/hxd/blockchain/stake"
-	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/wire"
-	hxutil "github.com/coolsnady/hxd/hxutil"
-	"github.com/coolsnady/hxwallet/apperrors"
-	"github.com/coolsnady/hxwallet/walletdb"
+	"github.com/coolsnady/hcd/blockchain/stake"
+	"github.com/coolsnady/hcd/chaincfg/chainhash"
+	"github.com/coolsnady/hcd/wire"
+	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcwallet/apperrors"
+	"github.com/coolsnady/hcwallet/walletdb"
 )
 
 const (
@@ -140,9 +140,9 @@ func deserializeSStxRecord(serializedSStxRecord []byte, dbVersion uint32) (*sstx
 			return nil, err
 		}
 
-		// Create and save the hxutil.Tx of the read MsgTx and set its index.
-		tx := hxutil.NewTx(msgTx)
-		tx.SetIndex(hxutil.TxIndexUnknown)
+		// Create and save the dcrutil.Tx of the read MsgTx and set its index.
+		tx := dcrutil.NewTx(msgTx)
+		tx.SetIndex(dcrutil.TxIndexUnknown)
 		tx.SetTree(wire.TxTreeStake)
 		record.tx = tx
 
@@ -164,7 +164,7 @@ func deserializeSStxRecord(serializedSStxRecord []byte, dbVersion uint32) (*sstx
 			return nil, err
 		}
 		unixTime := int64(binary.LittleEndian.Uint64(serializedSStxRecord[tx.SerializeSize():]))
-		return &sstxRecord{tx: hxutil.NewTx(&tx), ts: time.Unix(unixTime, 0)}, nil
+		return &sstxRecord{tx: dcrutil.NewTx(&tx), ts: time.Unix(unixTime, 0)}, nil
 
 	default:
 		panic("unreachable")

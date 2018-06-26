@@ -15,7 +15,7 @@ package udb
 import (
 	"errors"
 
-	"github.com/coolsnady/hxwallet/snacl"
+	"github.com/coolsnady/hcwallet/snacl"
 )
 
 // TstLatestMgrVersion makes the unexported latestMgrVersion variable available

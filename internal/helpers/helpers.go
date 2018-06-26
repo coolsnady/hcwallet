@@ -8,14 +8,14 @@
 package helpers
 
 import (
-	"github.com/coolsnady/hxd/wire"
-	hxutil "github.com/coolsnady/hxd/hxutil"
+	"github.com/coolsnady/hcd/wire"
+	dcrutil "github.com/coolsnady/hcutil"
 )
 
 // SumOutputValues sums up the list of TxOuts and returns an Amount.
-func SumOutputValues(outputs []*wire.TxOut) (totalOutput hxutil.Amount) {
+func SumOutputValues(outputs []*wire.TxOut) (totalOutput dcrutil.Amount) {
 	for _, txOut := range outputs {
-		totalOutput += hxutil.Amount(txOut.Value)
+		totalOutput += dcrutil.Amount(txOut.Value)
 	}
 	return totalOutput
 }

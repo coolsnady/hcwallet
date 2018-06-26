@@ -5,9 +5,9 @@
 package udb
 
 import (
-	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxwallet/apperrors"
-	"github.com/coolsnady/hxwallet/walletdb"
+	"github.com/coolsnady/hcd/chaincfg"
+	"github.com/coolsnady/hcwallet/apperrors"
+	"github.com/coolsnady/hcwallet/walletdb"
 )
 
 // Old package namespace bucket keys.  These are still used as of the very first

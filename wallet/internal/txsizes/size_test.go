@@ -3,8 +3,8 @@ package txsizes_test
 import (
 	"testing"
 
-	"github.com/coolsnady/hxd/wire"
-	. "github.com/coolsnady/hxwallet/wallet/internal/txsizes"
+	"github.com/coolsnady/hcd/wire"
+	. "github.com/coolsnady/hcwallet/wallet/internal/txsizes"
 )
 
 const (

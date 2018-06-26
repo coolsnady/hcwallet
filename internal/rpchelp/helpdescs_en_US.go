@@ -416,7 +416,7 @@ var helpDescsEnUS = map[string]string{
 
 	// SetTicketMaxPrice help.
 	"setticketmaxprice--synopsis": "Set the max price user is willing to pay for a ticket.",
-	"setticketmaxprice-max":       "The max price (in dcr).",
+	"setticketmaxprice-max":       "The max price (in hc).",
 
 	// SetTxFeeCmd help.
 	"settxfee--synopsis": "Modify the fee per kB of the serialized tx size used each time more fee is required for an authored transaction.",

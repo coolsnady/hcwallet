@@ -13,9 +13,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/coolsnady/hxd/wire"
+	"github.com/coolsnady/hcd/wire"
 
-	rpc "github.com/coolsnady/hxd/rpcclient"
+	rpc "github.com/coolsnady/hcrpcclient"
 )
 
 // walletTestConfig contains all the args, and data required to launch a dcrwallet process

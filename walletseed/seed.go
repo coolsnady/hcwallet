@@ -11,8 +11,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/coolsnady/hxd/hdkeychain"
-	"github.com/coolsnady/hxwallet/pgpwordlist"
+	"github.com/coolsnady/hcutil/hdkeychain"
+	"github.com/coolsnady/hcwallet/pgpwordlist"
 )
 
 // GenerateRandomSeed returns a new seed created from a cryptographically-secure

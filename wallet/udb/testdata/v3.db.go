@@ -14,12 +14,12 @@ import (
 	"io"
 	"os"
 
-	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxd/hdkeychain"
-	"github.com/coolsnady/hxwallet/wallet/udb"
-	"github.com/coolsnady/hxwallet/walletdb"
-	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
-	"github.com/coolsnady/hxwallet/walletseed"
+	"github.com/coolsnady/hcd/chaincfg"
+	"github.com/coolsnady/hcutil/hdkeychain"
+	"github.com/coolsnady/hcwallet/wallet/udb"
+	"github.com/coolsnady/hcwallet/walletdb"
+	_ "github.com/coolsnady/hcwallet/walletdb/bdb"
+	"github.com/coolsnady/hcwallet/walletseed"
 )
 
 const dbname = "v3.db"

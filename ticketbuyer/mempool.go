@@ -8,9 +8,9 @@ import (
 	"bytes"
 	"time"
 
-	"github.com/coolsnady/hxd/hxjson"
-	hxutil "github.com/coolsnady/hxd/hxutil"
-	"github.com/coolsnady/hxwallet/wallet"
+	"github.com/coolsnady/hcd/dcrjson"
+	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcwallet/wallet"
 )
 
 // ownTicketsInMempool finds all the tickets owned by the user in the
@@ -22,7 +22,7 @@ func (t *TicketPurchaser) ownTicketsInMempool() (int, error) {
 	// Ticket address is specified and may not belong to our own
 	// wallet. Search the mempool directly for the number of tickets.
 	if t.ticketAddress != nil {
-		tiHashes, err := t.dcrdChainSvr.GetRawMempool(hxjson.GRMTickets)
+		tiHashes, err := t.dcrdChainSvr.GetRawMempool(dcrjson.GRMTickets)
 		if err != nil {
 			return 0, err
 		}
@@ -37,7 +37,7 @@ func (t *TicketPurchaser) ownTicketsInMempool() (int, error) {
 			// Tickets can only pay to a single address. Assume that
 			// the address is on the right network.
 			addrStr := raw.Vout[0].ScriptPubKey.Addresses[0]
-			addr, err := hxutil.DecodeAddress(addrStr)
+			addr, err := dcrutil.DecodeAddress(addrStr)
 			if err != nil {
 				return 0, err
 			}

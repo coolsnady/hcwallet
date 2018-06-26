@@ -14,8 +14,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/coolsnady/hxd/hdkeychain"
-	"github.com/coolsnady/hxwallet/walletseed"
+	"github.com/coolsnady/hcutil/hdkeychain"
+	"github.com/coolsnady/hcwallet/walletseed"
 	"golang.org/x/crypto/ssh/terminal"
 )
 
@@ -135,6 +135,7 @@ func PassPrompt(reader *bufio.Reader, prefix string, confirm bool) ([]byte, erro
 		if err != nil {
 			return nil, err
 		}
+
 		fmt.Print("\n")
 		pass = bytes.TrimSpace(pass)
 		if len(pass) == 0 {

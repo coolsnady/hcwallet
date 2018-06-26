@@ -15,22 +15,22 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/decred/slog"
-	hxutil "github.com/coolsnady/hxd/hxutil"
-	"github.com/coolsnady/hxwallet/internal/cfgutil"
-	"github.com/coolsnady/hxwallet/netparams"
-	"github.com/coolsnady/hxwallet/ticketbuyer"
-	"github.com/coolsnady/hxwallet/wallet"
-	"github.com/coolsnady/hxwallet/wallet/txrules"
+	"github.com/btcsuite/btclog"
+	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcwallet/internal/cfgutil"
+	"github.com/coolsnady/hcwallet/netparams"
+	"github.com/coolsnady/hcwallet/ticketbuyer"
+	"github.com/coolsnady/hcwallet/wallet"
+	"github.com/coolsnady/hcwallet/wallet/txrules"
 	flags "github.com/jessevdk/go-flags"
 )
 
 const (
-	defaultCAFilename          = "hxd.cert"
-	defaultConfigFilename      = "hxwallet.conf"
+	defaultCAFilename          = "hcd.cert"
+	defaultConfigFilename      = "hcwallet.conf"
 	defaultLogLevel            = "info"
 	defaultLogDirname          = "logs"
-	defaultLogFilename         = "hxwallet.log"
+	defaultLogFilename         = "hcwallet.log"
 	defaultRPCMaxClients       = 10
 	defaultRPCMaxWebsockets    = 25
 	defaultEnableTicketBuyer   = false
@@ -48,8 +48,8 @@ const (
 	defaultAllowHighFees       = false
 
 	// ticket buyer options
-	defaultMaxFee                    hxutil.Amount = 1e6
-	defaultMinFee                    hxutil.Amount = 1e5
+	defaultMaxFee                    dcrutil.Amount = 1e6
+	defaultMinFee                    dcrutil.Amount = 1e5
 	defaultMaxPriceScale                            = 0.0
 	defaultAvgVWAPPriceDelta                        = 2880
 	defaultMaxPerBlock                              = 1
@@ -69,8 +69,8 @@ const (
 )
 
 var (
-	dcrdDefaultCAFile  = filepath.Join(hxutil.AppDataDir("hxd", false), "rpc.cert")
-	defaultAppDataDir  = hxutil.AppDataDir("hxwallet", false)
+	dcrdDefaultCAFile  = filepath.Join(dcrutil.AppDataDir("hcd", false), "rpc.cert")
+	defaultAppDataDir  = dcrutil.AppDataDir("hcwallet", false)
 	defaultConfigFile  = filepath.Join(defaultAppDataDir, defaultConfigFilename)
 	defaultRPCKeyFile  = filepath.Join(defaultAppDataDir, "rpc.key")
 	defaultRPCCertFile = filepath.Join(defaultAppDataDir, "rpc.cert")
@@ -115,11 +115,11 @@ type config struct {
 	TicketFee           *cfgutil.AmountFlag  `long:"ticketfee" description:"Sets the wallet's ticket fee per kb"`
 
 	// RPC client options
-	RPCConnect       string                  `short:"c" long:"rpcconnect" description:"Hostname/IP and port of dcrd RPC server to connect to"`
-	CAFile           *cfgutil.ExplicitString `long:"cafile" description:"File containing root certificates to authenticate a TLS connections with dcrd"`
+	RPCConnect       string                  `short:"c" long:"rpcconnect" description:"Hostname/IP and port of hcd RPC server to connect to"`
+	CAFile           *cfgutil.ExplicitString `long:"cafile" description:"File containing root certificates to authenticate a TLS connections with hcd"`
 	DisableClientTLS bool                    `long:"noclienttls" description:"Disable TLS for the RPC client -- NOTE: This is only allowed if the RPC client is connecting to localhost"`
-	DcrdUsername     string                  `long:"dcrdusername" description:"Username for dcrd authentication"`
-	DcrdPassword     string                  `long:"dcrdpassword" default-mask:"-" description:"Password for dcrd authentication"`
+	HcUsername       string                  `long:"hcusername" description:"Username for hcd authentication"`
+	HcPassword       string                  `long:"hcpassword" default-mask:"-" description:"Password for hcd authentication"`
 	Proxy            string                  `long:"proxy" description:"Connect via SOCKS5 proxy (eg. 127.0.0.1:9050)"`
 	ProxyUser        string                  `long:"proxyuser" description:"Username for proxy server"`
 	ProxyPass        string                  `long:"proxypass" default-mask:"-" description:"Password for proxy server"`
@@ -143,8 +143,8 @@ type config struct {
 	NoLegacyRPC            bool                    `long:"nolegacyrpc" description:"Disable the legacy JSON-RPC server"`
 	LegacyRPCMaxClients    int64                   `long:"rpcmaxclients" description:"Max number of legacy JSON-RPC clients for standard connections"`
 	LegacyRPCMaxWebsockets int64                   `long:"rpcmaxwebsockets" description:"Max number of legacy JSON-RPC websocket connections"`
-	Username               string                  `short:"u" long:"username" description:"Username for legacy JSON-RPC and dcrd authentication (if dcrdusername is unset)"`
-	Password               string                  `short:"P" long:"password" default-mask:"-" description:"Password for legacy JSON-RPC and dcrd authentication (if dcrdpassword is unset)"`
+	Username               string                  `short:"u" long:"username" description:"Username for legacy JSON-RPC and hcd authentication (if hcusername is unset)"`
+	Password               string                  `short:"P" long:"password" default-mask:"-" description:"Password for legacy JSON-RPC and hcd authentication (if hcpassword is unset)"`
 
 	// IPC options
 	PipeTx            *uint `long:"pipetx" description:"File descriptor or handle of write end pipe to enable child -> parent process communication"`
@@ -237,7 +237,7 @@ func cleanAndExpandPath(path string) string {
 
 // validLogLevel returns whether or not logLevel is a valid debug log level.
 func validLogLevel(logLevel string) bool {
-	_, ok := slog.LevelFromString(logLevel)
+	_, ok := btclog.LevelFromString(logLevel)
 	return ok
 }
 
@@ -764,12 +764,12 @@ func loadConfig() (*config, []string, error) {
 			return loadConfigError(err)
 		}
 	} else {
-		// If CAFile is unset, choose either the copy or local dcrd cert.
+		// If CAFile is unset, choose either the copy or local hcd cert.
 		if !cfg.CAFile.ExplicitlySet() {
 			cfg.CAFile.Value = filepath.Join(cfg.AppDataDir.Value, defaultCAFilename)
 
 			// If the CA copy does not exist, check if we're connecting to
-			// a local dcrd and switch to its RPC cert if it exists.
+			// a local hcd and switch to its RPC cert if it exists.
 			certExists, err := cfgutil.FileExists(cfg.CAFile.Value)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
@@ -884,15 +884,15 @@ func loadConfig() (*config, []string, error) {
 	cfg.RPCCert.Value = cleanAndExpandPath(cfg.RPCCert.Value)
 	cfg.RPCKey.Value = cleanAndExpandPath(cfg.RPCKey.Value)
 
-	// If the dcrd username or password are unset, use the same auth as for
-	// the client.  The two settings were previously shared for dcrd and
+	// If the hcd username or password are unset, use the same auth as for
+	// the client.  The two settings were previously shared for hcd and
 	// client auth, so this avoids breaking backwards compatibility while
-	// allowing users to use different auth settings for dcrd and wallet.
-	if cfg.DcrdUsername == "" {
-		cfg.DcrdUsername = cfg.Username
+	// allowing users to use different auth settings for hcd and wallet.
+	if cfg.HcUsername == "" {
+		cfg.HcUsername = cfg.Username
 	}
-	if cfg.DcrdPassword == "" {
-		cfg.DcrdPassword = cfg.Password
+	if cfg.HcPassword == "" {
+		cfg.HcPassword = cfg.Password
 	}
 
 	// Warn if user still has an old ticket buyer configuration file.

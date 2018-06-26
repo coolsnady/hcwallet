@@ -8,7 +8,7 @@ package bdb
 import (
 	"fmt"
 
-	"github.com/coolsnady/hxwallet/walletdb"
+	"github.com/coolsnady/hcwallet/walletdb"
 )
 
 const (

@@ -3,19 +3,19 @@ package txrules_test
 import (
 	"testing"
 
-	"github.com/coolsnady/hxd/chaincfg"
-	hxutil "github.com/coolsnady/hxd/hxutil"
-	. "github.com/coolsnady/hxwallet/wallet/txrules"
+	"github.com/coolsnady/hcd/chaincfg"
+	dcrutil "github.com/coolsnady/hcutil"
+	. "github.com/coolsnady/hcwallet/wallet/txrules"
 )
 
 func TestStakePoolTicketFee(t *testing.T) {
 	params := &chaincfg.MainNetParams
 	tests := []struct {
-		StakeDiff hxutil.Amount
-		Fee       hxutil.Amount
+		StakeDiff dcrutil.Amount
+		Fee       dcrutil.Amount
 		Height    int32
 		PoolFee   float64
-		Expected  hxutil.Amount
+		Expected  dcrutil.Amount
 	}{
 		0: {10 * 1e8, 0.01 * 1e8, 25000, 1.00, 0.01500463 * 1e8},
 		1: {20 * 1e8, 0.01 * 1e8, 25000, 1.00, 0.01621221 * 1e8},

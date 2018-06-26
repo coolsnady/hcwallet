@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/coolsnady/hxwallet/internal/zero"
+	. "github.com/coolsnady/hcwallet/internal/zero"
 )
 
 func makeOneBytes(n int) []byte {

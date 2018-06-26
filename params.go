@@ -5,6 +5,6 @@
 
 package main
 
-import "github.com/coolsnady/hxwallet/netparams"
+import "github.com/coolsnady/hcwallet/netparams"
 
 var activeNet = &netparams.MainNetParams

@@ -5,16 +5,16 @@
 
 package cfgutil
 
-import hxutil "github.com/coolsnady/hxd/hxutil"
+import dcrutil "github.com/coolsnady/hcutil"
 
-// AddressFlag embeds a hxutil.Address and implements the flags.Marshaler and
+// AddressFlag embeds a dcrutil.Address and implements the flags.Marshaler and
 // Unmarshaler interfaces so it can be used as a config struct field.
 type AddressFlag struct {
-	hxutil.Address
+	dcrutil.Address
 }
 
-// NewAddressFlag creates an AddressFlag with a default hxutil.Address.
-func NewAddressFlag(defaultValue hxutil.Address) *AddressFlag {
+// NewAddressFlag creates an AddressFlag with a default dcrutil.Address.
+func NewAddressFlag(defaultValue dcrutil.Address) *AddressFlag {
 	return &AddressFlag{defaultValue}
 }
 
@@ -33,7 +33,7 @@ func (a *AddressFlag) UnmarshalFlag(addr string) error {
 		a.Address = nil
 		return nil
 	}
-	address, err := hxutil.DecodeAddress(addr)
+	address, err := dcrutil.DecodeAddress(addr)
 	if err != nil {
 		return err
 	}

@@ -21,11 +21,11 @@ import (
 	"time"
 
 	"github.com/btcsuite/websocket"
-	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxd/hxjson"
-    dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
-	"github.com/coolsnady/hxwallet/chain"
-	"github.com/coolsnady/hxwallet/loader"
+	"github.com/coolsnady/hcd/chaincfg"
+	"github.com/coolsnady/hcd/dcrjson"
+    hcrpcclient "github.com/coolsnady/hcrpcclient"
+	"github.com/coolsnady/hcwallet/chain"
+	"github.com/coolsnady/hcwallet/loader"
 )
 
 type websocketClient struct {
@@ -262,12 +262,12 @@ func (s *Server) SetChainServer(chainClient *chain.RPCClient) {
 
 // handlerClosure creates a closure function for handling requests of the given
 // method.  This may be a request that is handled directly by dcrwallet, or
-// a chain server request that is handled by passing the request down to dcrd.
+// a chain server request that is handled by passing the request down to hcd.
 //
 // NOTE: These handlers do not handle special cases, such as the authenticate
 // method.  Each of these must be checked beforehand (the method is already
 // known) and handled accordingly.
-func (s *Server) handlerClosure(ctx context.Context, request *hxjson.Request) lazyHandler {
+func (s *Server) handlerClosure(ctx context.Context, request *dcrjson.Request) lazyHandler {
 	log.Infof("RPC method %v invoked by client %v", request.Method, remoteAddr(ctx))
 
 	wallet, _ := s.walletLoader.LoadedWallet()
@@ -275,9 +275,9 @@ func (s *Server) handlerClosure(ctx context.Context, request *hxjson.Request) la
 	chainClient := s.chainClient
 	s.handlerMu.Unlock()
 
-	var rpcClient *dcrrpcclient.Client
+	var rpcClient *hcrpcclient.Client
 	if chainClient != nil {
-		// The "help" RPC must use an HTTP POST client when calling down to dcrd
+		// The "help" RPC must use an HTTP POST client when calling down to hcd
 		// for additional help methods.  This is required to avoid including
 		// websocket-only requests in the help, which are not callable by wallet
 		// JSON-RPC clients.  Any errors creating the POST client may be ignored
@@ -343,7 +343,7 @@ func throttled(threshold int64, h http.Handler) http.Handler {
 
 // idPointer returns a pointer to the passed ID, or nil if the interface is nil.
 // Interface pointers are usually a red flag of doing something incorrectly,
-// but this is only implemented here to work around an oddity with hxjson,
+// but this is only implemented here to work around an oddity with dcrjson,
 // which uses empty interface pointers for response IDs.
 func idPointer(id interface{}) (p *interface{}) {
 	if id != nil {
@@ -355,12 +355,12 @@ func idPointer(id interface{}) (p *interface{}) {
 // invalidAuth checks whether a websocket request is a valid (parsable)
 // authenticate request and checks the supplied username and passphrase
 // against the server auth.
-func (s *Server) invalidAuth(req *hxjson.Request) bool {
-	cmd, err := hxjson.UnmarshalCmd(req)
+func (s *Server) invalidAuth(req *dcrjson.Request) bool {
+	cmd, err := dcrjson.UnmarshalCmd(req)
 	if err != nil {
 		return false
 	}
-	authCmd, ok := cmd.(*hxjson.AuthenticateCmd)
+	authCmd, ok := cmd.(*dcrjson.AuthenticateCmd)
 	if !ok {
 		return false
 	}
@@ -401,7 +401,7 @@ out:
 				break out
 			}
 
-			var req hxjson.Request
+			var req dcrjson.Request
 			err := json.Unmarshal(reqBytes, &req)
 			if err != nil {
 				log.Warnf("Failed unmarshal of JSON-RPC request object "+
@@ -411,7 +411,7 @@ out:
 					break out
 				}
 				resp := makeResponse(req.ID, nil,
-					hxjson.ErrRPCInvalidRequest)
+					dcrjson.ErrRPCInvalidRequest)
 				mresp, err := json.Marshal(resp)
 				// We expect the marshal to succeed.  If it
 				// doesn't, it indicates some non-marshalable
@@ -482,7 +482,7 @@ out:
 				wsc.wg.Add(1)
 				go func() {
 					resp, jsonErr := f()
-					mresp, err := hxjson.MarshalResponse(req.Jsonrpc, req.ID, resp, jsonErr)
+					mresp, err := dcrjson.MarshalResponse(req.ID, resp, jsonErr)
 					if err != nil {
 						log.Errorf("Unable to marshal response to client %s: %v",
 							remoteAddr(ctx), err)
@@ -582,10 +582,10 @@ func (s *Server) postClientRPC(w http.ResponseWriter, r *http.Request) {
 	// If unfound, the request is sent to the chain server for further
 	// processing.  While checking the methods, disallow authenticate
 	// requests, as they are invalid for HTTP POST clients.
-	var req hxjson.Request
+	var req dcrjson.Request
 	err = json.Unmarshal(rpcRequest, &req)
 	if err != nil {
-		resp, err := hxjson.MarshalResponse(req.Jsonrpc, req.ID, nil, hxjson.ErrRPCInvalidRequest)
+		resp, err := dcrjson.MarshalResponse(req.ID, nil, dcrjson.ErrRPCInvalidRequest)
 		if err != nil {
 			log.Errorf("Unable to marshal response to client %s: %v",
 				r.RemoteAddr, err)
@@ -604,7 +604,7 @@ func (s *Server) postClientRPC(w http.ResponseWriter, r *http.Request) {
 	// Create the response and error from the request.  Two special cases
 	// are handled for the authenticate and stop request methods.
 	var res interface{}
-	var jsonErr *hxjson.RPCError
+	var jsonErr *dcrjson.RPCError
 	var stop bool
 	switch req.Method {
 	case "authenticate":
@@ -621,7 +621,7 @@ func (s *Server) postClientRPC(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Marshal and send.
-	mresp, err := hxjson.MarshalResponse(req.Jsonrpc, req.ID, res, jsonErr)
+	mresp, err := dcrjson.MarshalResponse(req.ID, res, jsonErr)
 	if err != nil {
 		log.Errorf("Unable to marshal response to client %s: %v",
 			r.RemoteAddr, err)

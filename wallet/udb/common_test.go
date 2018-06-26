@@ -16,12 +16,12 @@ import (
 	"testing"
 
 	"github.com/boltdb/bolt"
-	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/wire"
-	"github.com/coolsnady/hxwallet/apperrors"
-	"github.com/coolsnady/hxwallet/walletdb"
-	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
+	"github.com/coolsnady/hcd/chaincfg"
+	"github.com/coolsnady/hcd/chaincfg/chainhash"
+	"github.com/coolsnady/hcd/wire"
+	"github.com/coolsnady/hcwallet/apperrors"
+	"github.com/coolsnady/hcwallet/walletdb"
+	_ "github.com/coolsnady/hcwallet/walletdb/bdb"
 )
 
 var (

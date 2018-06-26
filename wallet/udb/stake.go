@@ -10,14 +10,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coolsnady/hxd/blockchain/stake"
-	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxd/chaincfg/chainec"
-	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/wire"
-	hxutil "github.com/coolsnady/hxd/hxutil"
-	"github.com/coolsnady/hxwallet/apperrors"
-	"github.com/coolsnady/hxwallet/walletdb"
+	"github.com/coolsnady/hcd/blockchain/stake"
+	"github.com/coolsnady/hcd/chaincfg"
+	"github.com/coolsnady/hcd/chaincfg/chainec"
+	"github.com/coolsnady/hcd/chaincfg/chainhash"
+	"github.com/coolsnady/hcd/wire"
+	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcwallet/apperrors"
+	"github.com/coolsnady/hcwallet/walletdb"
 )
 
 func stakeStoreError(code apperrors.Code, str string, err error) error {
@@ -26,7 +26,7 @@ func stakeStoreError(code apperrors.Code, str string, err error) error {
 
 // sstxRecord is the structure for a stored SStx.
 type sstxRecord struct {
-	tx          *hxutil.Tx
+	tx          *dcrutil.Tx
 	ts          time.Time
 	voteBitsSet bool   // Removed in version 3
 	voteBits    uint16 // Removed in version 3
@@ -121,7 +121,7 @@ func (s *StakeStore) addHashToStore(hash *chainhash.Hash) {
 }
 
 // insertSStx inserts an SStx into the store.
-func (s *StakeStore) insertSStx(ns walletdb.ReadWriteBucket, sstx *hxutil.Tx) error {
+func (s *StakeStore) insertSStx(ns walletdb.ReadWriteBucket, sstx *dcrutil.Tx) error {
 	// If we already have the SStx, no need to
 	// try to include twice.
 	exists := s.checkHashInStore(sstx.Hash())
@@ -149,7 +149,7 @@ func (s *StakeStore) insertSStx(ns walletdb.ReadWriteBucket, sstx *hxutil.Tx) er
 
 // InsertSStx is the exported version of insertSStx that is safe for concurrent
 // access.
-func (s *StakeStore) InsertSStx(ns walletdb.ReadWriteBucket, sstx *hxutil.Tx) error {
+func (s *StakeStore) InsertSStx(ns walletdb.ReadWriteBucket, sstx *dcrutil.Tx) error {
 	s.mtx.Lock()
 	err := s.insertSStx(ns, sstx)
 	s.mtx.Unlock()
@@ -183,7 +183,7 @@ func (s *StakeStore) DumpSStxHashes() []chainhash.Hash {
 }
 
 // dumpSStxHashes dumps the hashes of all owned SStxs for some address.
-func (s *StakeStore) dumpSStxHashesForAddress(ns walletdb.ReadBucket, addr hxutil.Address) ([]chainhash.Hash, error) {
+func (s *StakeStore) dumpSStxHashesForAddress(ns walletdb.ReadBucket, addr dcrutil.Address) ([]chainhash.Hash, error) {
 	// Extract the HASH160 script hash; if it's not 20 bytes
 	// long, return an error.
 	hash160 := addr.ScriptAddress()
@@ -191,7 +191,7 @@ func (s *StakeStore) dumpSStxHashesForAddress(ns walletdb.ReadBucket, addr hxuti
 		str := "stake store is closed"
 		return nil, stakeStoreError(apperrors.ErrInput, str, nil)
 	}
-	_, addrIsP2SH := addr.(*hxutil.AddressScriptHash)
+	_, addrIsP2SH := addr.(*dcrutil.AddressScriptHash)
 
 	allTickets := s.dumpSStxHashes()
 	var ticketsForAddr []chainhash.Hash
@@ -217,7 +217,7 @@ func (s *StakeStore) dumpSStxHashesForAddress(ns walletdb.ReadBucket, addr hxuti
 
 // DumpSStxHashesForAddress returns the hashes of all wallet ticket purchase
 // transactions for an address.
-func (s *StakeStore) DumpSStxHashesForAddress(ns walletdb.ReadBucket, addr hxutil.Address) ([]chainhash.Hash, error) {
+func (s *StakeStore) DumpSStxHashesForAddress(ns walletdb.ReadBucket, addr dcrutil.Address) ([]chainhash.Hash, error) {
 	defer s.mtx.RUnlock()
 	s.mtx.RLock()
 
@@ -225,18 +225,18 @@ func (s *StakeStore) DumpSStxHashesForAddress(ns walletdb.ReadBucket, addr hxuti
 }
 
 // sstxAddress returns the address for a given ticket.
-func (s *StakeStore) sstxAddress(ns walletdb.ReadBucket, hash *chainhash.Hash) (hxutil.Address, error) {
+func (s *StakeStore) sstxAddress(ns walletdb.ReadBucket, hash *chainhash.Hash) (dcrutil.Address, error) {
 	// Access the database and store the result locally.
 	thisHash160, p2sh, err := fetchSStxRecordSStxTicketHash160(ns, hash, DBVersion)
 	if err != nil {
 		str := "failure getting ticket 0th out script hashes from db"
 		return nil, stakeStoreError(apperrors.ErrDatabase, str, err)
 	}
-	var addr hxutil.Address
+	var addr dcrutil.Address
 	if p2sh {
-		addr, err = hxutil.NewAddressScriptHashFromHash(thisHash160, s.Params)
+		addr, err = dcrutil.NewAddressScriptHashFromHash(thisHash160, s.Params)
 	} else {
-		addr, err = hxutil.NewAddressPubKeyHash(thisHash160, s.Params, chainec.ECTypeSecp256k1)
+		addr, err = dcrutil.NewAddressPubKeyHash(thisHash160, s.Params, chainec.ECTypeSecp256k1)
 	}
 	if err != nil {
 		str := "failure getting ticket 0th out script hashes from db"
@@ -247,7 +247,7 @@ func (s *StakeStore) sstxAddress(ns walletdb.ReadBucket, hash *chainhash.Hash) (
 }
 
 // SStxAddress is the exported, concurrency safe version of sstxAddress.
-func (s *StakeStore) SStxAddress(ns walletdb.ReadBucket, hash *chainhash.Hash) (hxutil.Address, error) {
+func (s *StakeStore) SStxAddress(ns walletdb.ReadBucket, hash *chainhash.Hash) (dcrutil.Address, error) {
 	return s.sstxAddress(ns, hash)
 }
 
@@ -396,9 +396,9 @@ func (s *StakeStore) StoreRevocationInfo(dbtx walletdb.ReadWriteTx, ticketHash, 
 // updateStakePoolUserTickets updates a stake pool ticket for a given user.
 // If the ticket does not currently exist in the database, it adds it. If it
 // does exist (the ticket hash exists), it replaces the old record.
-func (s *StakeStore) updateStakePoolUserTickets(ns walletdb.ReadWriteBucket, user hxutil.Address, ticket *PoolTicket) error {
-	_, isScriptHash := user.(*hxutil.AddressScriptHash)
-	_, isP2PKH := user.(*hxutil.AddressPubKeyHash)
+func (s *StakeStore) updateStakePoolUserTickets(ns walletdb.ReadWriteBucket, user dcrutil.Address, ticket *PoolTicket) error {
+	_, isScriptHash := user.(*dcrutil.AddressScriptHash)
+	_, isP2PKH := user.(*dcrutil.AddressPubKeyHash)
 	if !(isScriptHash || isP2PKH) {
 		str := fmt.Sprintf("user %v is invalid", user.EncodeAddress())
 		return stakeStoreError(apperrors.ErrBadPoolUserAddr, str, nil)
@@ -412,17 +412,17 @@ func (s *StakeStore) updateStakePoolUserTickets(ns walletdb.ReadWriteBucket, use
 
 // UpdateStakePoolUserTickets is the exported and concurrency safe form of
 // updateStakePoolUserTickets.
-func (s *StakeStore) UpdateStakePoolUserTickets(ns walletdb.ReadWriteBucket, user hxutil.Address, ticket *PoolTicket) error {
+func (s *StakeStore) UpdateStakePoolUserTickets(ns walletdb.ReadWriteBucket, user dcrutil.Address, ticket *PoolTicket) error {
 	return s.updateStakePoolUserTickets(ns, user, ticket)
 }
 
 // removeStakePoolUserInvalTickets prepares the user.Address and asks stakedb
 // to remove the formerly invalid tickets.
-func (s *StakeStore) removeStakePoolUserInvalTickets(ns walletdb.ReadWriteBucket, user hxutil.Address,
+func (s *StakeStore) removeStakePoolUserInvalTickets(ns walletdb.ReadWriteBucket, user dcrutil.Address,
 	ticket *chainhash.Hash) error {
 
-	_, isScriptHash := user.(*hxutil.AddressScriptHash)
-	_, isP2PKH := user.(*hxutil.AddressPubKeyHash)
+	_, isScriptHash := user.(*dcrutil.AddressScriptHash)
+	_, isP2PKH := user.(*dcrutil.AddressPubKeyHash)
 	if !(isScriptHash || isP2PKH) {
 		str := fmt.Sprintf("user %v is invalid", user.EncodeAddress())
 		return stakeStoreError(apperrors.ErrBadPoolUserAddr, str, nil)
@@ -436,7 +436,7 @@ func (s *StakeStore) removeStakePoolUserInvalTickets(ns walletdb.ReadWriteBucket
 
 // RemoveStakePoolUserInvalTickets is the exported and concurrency safe form of
 // removetStakePoolUserInvalTickets.
-func (s *StakeStore) RemoveStakePoolUserInvalTickets(ns walletdb.ReadWriteBucket, user hxutil.Address,
+func (s *StakeStore) RemoveStakePoolUserInvalTickets(ns walletdb.ReadWriteBucket, user dcrutil.Address,
 	ticket *chainhash.Hash) error {
 	return s.removeStakePoolUserInvalTickets(ns, user, ticket)
 }
@@ -444,9 +444,9 @@ func (s *StakeStore) RemoveStakePoolUserInvalTickets(ns walletdb.ReadWriteBucket
 // updateStakePoolUserInvalTickets updates the list of invalid stake pool
 // tickets for a given user. If the ticket does not currently exist in the
 // database, it adds it.
-func (s *StakeStore) updateStakePoolUserInvalTickets(ns walletdb.ReadWriteBucket, user hxutil.Address, ticket *chainhash.Hash) error {
-	_, isScriptHash := user.(*hxutil.AddressScriptHash)
-	_, isP2PKH := user.(*hxutil.AddressPubKeyHash)
+func (s *StakeStore) updateStakePoolUserInvalTickets(ns walletdb.ReadWriteBucket, user dcrutil.Address, ticket *chainhash.Hash) error {
+	_, isScriptHash := user.(*dcrutil.AddressScriptHash)
+	_, isP2PKH := user.(*dcrutil.AddressPubKeyHash)
 	if !(isScriptHash || isP2PKH) {
 		str := fmt.Sprintf("user %v is invalid", user.EncodeAddress())
 		return stakeStoreError(apperrors.ErrBadPoolUserAddr, str, nil)
@@ -460,13 +460,13 @@ func (s *StakeStore) updateStakePoolUserInvalTickets(ns walletdb.ReadWriteBucket
 
 // UpdateStakePoolUserInvalTickets is the exported and concurrency safe form of
 // updateStakePoolUserInvalTickets.
-func (s *StakeStore) UpdateStakePoolUserInvalTickets(ns walletdb.ReadWriteBucket, user hxutil.Address, ticket *chainhash.Hash) error {
+func (s *StakeStore) UpdateStakePoolUserInvalTickets(ns walletdb.ReadWriteBucket, user dcrutil.Address, ticket *chainhash.Hash) error {
 	return s.updateStakePoolUserInvalTickets(ns, user, ticket)
 }
 
-func stakePoolUserInfo(ns walletdb.ReadBucket, user hxutil.Address) (*StakePoolUser, error) {
-	_, isScriptHash := user.(*hxutil.AddressScriptHash)
-	_, isP2PKH := user.(*hxutil.AddressPubKeyHash)
+func stakePoolUserInfo(ns walletdb.ReadBucket, user dcrutil.Address) (*StakePoolUser, error) {
+	_, isScriptHash := user.(*dcrutil.AddressScriptHash)
+	_, isP2PKH := user.(*dcrutil.AddressPubKeyHash)
 	if !(isScriptHash || isP2PKH) {
 		str := fmt.Sprintf("user %v is invalid", user.EncodeAddress())
 		return nil, stakeStoreError(apperrors.ErrBadPoolUserAddr, str, nil)
@@ -519,7 +519,7 @@ func stakePoolUserInfo(ns walletdb.ReadBucket, user hxutil.Address) (*StakePoolU
 
 // StakePoolUserInfo returns the stake pool user information for a given stake
 // pool user, keyed to their P2SH voting address.
-func (s *StakeStore) StakePoolUserInfo(ns walletdb.ReadBucket, user hxutil.Address) (*StakePoolUser, error) {
+func (s *StakeStore) StakePoolUserInfo(ns walletdb.ReadBucket, user dcrutil.Address) (*StakePoolUser, error) {
 	return stakePoolUserInfo(ns, user)
 }
 

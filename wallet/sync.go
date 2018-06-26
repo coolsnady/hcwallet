@@ -9,12 +9,12 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/hybridnetwork/bitset"
-	hxutil "github.com/coolsnady/hxd/hxutil"
-	"github.com/coolsnady/hxd/hdkeychain"
-    dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
-	"github.com/coolsnady/hxwallet/wallet/udb"
-	"github.com/coolsnady/hxwallet/walletdb"
+	"github.com/coolsnady/bitset"
+	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil/hdkeychain"
+    hcrpcclient "github.com/coolsnady/hcrpcclient"
+	"github.com/coolsnady/hcwallet/wallet/udb"
+	"github.com/coolsnady/hcwallet/walletdb"
 )
 
 const MaxAccountForTestNet = 16
@@ -26,7 +26,7 @@ type result struct {
 	err     error
 }
 
-func (w *Wallet) findLastUsedAccount(client *dcrrpcclient.Client, coinTypeXpriv *hdkeychain.ExtendedKey) (uint32, uint32, map[uint32]result, error) {
+func (w *Wallet) findLastUsedAccount(client *hcrpcclient.Client, coinTypeXpriv *hdkeychain.ExtendedKey) (uint32, uint32, map[uint32]result, error) {
 	const scanLen = 100
 
 	var lastRecorded uint32
@@ -143,7 +143,7 @@ Bsearch:
 	return lastRecorded, lastUsed, requestAccount, nil
 }
 
-func (w *Wallet) findLastUsedAccountForTest(client *dcrrpcclient.Client, coinTypeXpriv *hdkeychain.ExtendedKey) (uint32, uint32, map[uint32]result, bool, error) {
+func (w *Wallet) findLastUsedAccountForTest(client *hcrpcclient.Client, coinTypeXpriv *hdkeychain.ExtendedKey) (uint32, uint32, map[uint32]result, bool, error) {
 	var lastRecorded uint32
 	var accountinfo *udb.AccountProperties
 	var havebliss bool
@@ -255,7 +255,7 @@ Bsearch:
 	return lastRecorded, lastUsed, requestAccount, havebliss, nil
 }
 
-func (w *Wallet) newAcctAndUsed(client *dcrrpcclient.Client, coinTypeXpriv *hdkeychain.ExtendedKey, account uint32, acctype uint8) (bool, error) {
+func (w *Wallet) newAcctAndUsed(client *hcrpcclient.Client, coinTypeXpriv *hdkeychain.ExtendedKey, account uint32, acctype uint8) (bool, error) {
 	xpriv, err := coinTypeXpriv.SwitchChild(hdkeychain.HardenedKeyStart+account, acctype)
 	if err != nil {
 		return false, err
@@ -275,7 +275,7 @@ func (w *Wallet) newAcctAndUsed(client *dcrrpcclient.Client, coinTypeXpriv *hdke
 	return used, nil
 }
 
-func (w *Wallet) accountUsed(client *dcrrpcclient.Client, xpub, xpriv *hdkeychain.ExtendedKey) (bool, error) {
+func (w *Wallet) accountUsed(client *hcrpcclient.Client, xpub, xpriv *hdkeychain.ExtendedKey) (bool, error) {
 	var err error
 	var extKey, intKey, intKeypriv, extKeypriv *hdkeychain.ExtendedKey
 	if xpub.GetAlgType() == udb.AcctypeEc {
@@ -317,9 +317,9 @@ func (w *Wallet) accountUsed(client *dcrrpcclient.Client, xpub, xpriv *hdkeychai
 	return false, nil
 }
 
-func (w *Wallet) branchUsed(client *dcrrpcclient.Client, branchXpub, branchXpriv *hdkeychain.ExtendedKey) (bool, error) {
+func (w *Wallet) branchUsed(client *hcrpcclient.Client, branchXpub, branchXpriv *hdkeychain.ExtendedKey) (bool, error) {
 	var err error
-	addrs := make([]hxutil.Address, 0, w.gapLimit)
+	addrs := make([]dcrutil.Address, 0, w.gapLimit)
 	if branchXpub.GetAlgType() == udb.AcctypeEc {
 		addrs, err = deriveChildAddresses(branchXpub, 0, uint32(2*w.gapLimit), w.chainParams)
 	} else if branchXpub.GetAlgType() == udb.AcctypeBliss {
@@ -343,7 +343,7 @@ func (w *Wallet) branchUsed(client *dcrrpcclient.Client, branchXpub, branchXpriv
 // findLastUsedAddress returns the child index of the last used child address
 // derived from a branch key.  If no addresses are found, ^uint32(0) is
 // returned.
-func (w *Wallet) findLastUsedAddress(client *dcrrpcclient.Client, branchkey *hdkeychain.ExtendedKey, account, branch uint32) (uint32, error) {
+func (w *Wallet) findLastUsedAddress(client *hcrpcclient.Client, branchkey *hdkeychain.ExtendedKey, account, branch uint32) (uint32, error) {
 	var (
 		lastUsed        = ^uint32(0)
 		scanLen         = uint32(w.gapLimit)
@@ -353,7 +353,7 @@ func (w *Wallet) findLastUsedAddress(client *dcrrpcclient.Client, branchkey *hdk
 Bsearch:
 	for lo <= hi {
 		mid := (hi + lo) / 2
-		addrs := make([]hxutil.Address, 0)
+		addrs := make([]dcrutil.Address, 0)
 		var err error
 		if branchkey.GetAlgType() == udb.AcctypeEc {
 			addrs, err = deriveChildAddresses(branchkey, mid*scanLen, scanLen, w.chainParams)
@@ -386,8 +386,8 @@ Bsearch:
 	return lastUsed, nil
 }
 
-func (w *Wallet) FindactiveAddressesForBliss(account, branch, start, count uint32) ([]hxutil.Address, error) {
-	addrs := make([]hxutil.Address, count)
+func (w *Wallet) FindactiveAddressesForBliss(account, branch, start, count uint32) ([]dcrutil.Address, error) {
+	addrs := make([]dcrutil.Address, count)
 	err := walletdb.Update(w.db, func(tx walletdb.ReadWriteTx) error {
 		var err error
 		addrmgrNs := tx.ReadWriteBucket(waddrmgrNamespaceKey)
@@ -410,7 +410,7 @@ func (w *Wallet) FindactiveAddressesForBliss(account, branch, start, count uint3
 // account extended pubkeys.
 //
 // A transaction filter (re)load and rescan should be performed after discovery.
-func (w *Wallet) DiscoverActiveAddresses(chainClient *dcrrpcclient.Client, discoverAccts bool) error {
+func (w *Wallet) DiscoverActiveAddresses(chainClient *hcrpcclient.Client, discoverAccts bool) error {
 	// Start by rescanning the accounts and determining what the
 	// current account index is. This scan should only ever be
 	// performed if we're restoring our wallet from seed.

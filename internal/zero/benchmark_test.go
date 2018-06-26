@@ -8,7 +8,7 @@ package zero_test
 import (
 	"testing"
 
-	. "github.com/coolsnady/hxwallet/internal/zero"
+	. "github.com/coolsnady/hcwallet/internal/zero"
 )
 
 var (

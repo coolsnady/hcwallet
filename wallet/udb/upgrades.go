@@ -7,13 +7,13 @@ package udb
 import (
 	"crypto/sha256"
 
-	"github.com/coolsnady/hxd/blockchain/stake"
-	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/hdkeychain"
-	"github.com/coolsnady/hxwallet/apperrors"
-	"github.com/coolsnady/hxwallet/snacl"
-	"github.com/coolsnady/hxwallet/walletdb"
+	"github.com/coolsnady/hcd/blockchain/stake"
+	"github.com/coolsnady/hcd/chaincfg"
+	"github.com/coolsnady/hcd/chaincfg/chainhash"
+	"github.com/coolsnady/hcutil/hdkeychain"
+	"github.com/coolsnady/hcwallet/apperrors"
+	"github.com/coolsnady/hcwallet/snacl"
+	"github.com/coolsnady/hcwallet/walletdb"
 )
 
 // Note: all manager functions always use the latest version of the database.
@@ -237,7 +237,7 @@ func lastUsedAddressIndexUpgrade(tx walletdb.ReadWriteTx, publicPassphrase, priv
 				}
 			}
 			// This can't error because the function always passes good input to
-			// hxutil.NewAddressPubKeyHash.  Also, while it looks like a
+			// dcrutil.NewAddressPubKeyHash.  Also, while it looks like a
 			// mistake to hardcode the mainnet parameters here, it doesn't make
 			// any difference since only the pubkey hash is used.  (Why is there
 			// no exported method to just return the serialized public key?)
@@ -496,7 +496,8 @@ func ticketBucketUpgrade(tx walletdb.ReadWriteTx, publicPassphrase, privatePassp
 		if err != nil {
 			return err
 		}
-		if stake.IsSStx(&rec.MsgTx) {
+		isTicket, err := stake.IsSStx(&rec.MsgTx)
+		if err == nil && isTicket {
 			ticketHashes[hash] = struct{}{}
 		}
 	}
@@ -512,7 +513,8 @@ func ticketBucketUpgrade(tx walletdb.ReadWriteTx, publicPassphrase, privatePassp
 		if err != nil {
 			return err
 		}
-		if stake.IsSStx(&rec.MsgTx) {
+		isTicket, err := stake.IsSStx(&rec.MsgTx)
+		if err == nil && isTicket {
 			ticketHashes[hash] = struct{}{}
 		}
 	}

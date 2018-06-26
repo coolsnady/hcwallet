@@ -6,10 +6,10 @@
 package txsizes
 
 import (
-	"github.com/coolsnady/hxd/wire"
+	"github.com/coolsnady/hcd/wire"
 
-	h "github.com/coolsnady/hxwallet/internal/helpers"
-	"github.com/coolsnady/hxwallet/wallet/udb"
+	h "github.com/coolsnady/hcwallet/internal/helpers"
+	"github.com/coolsnady/hcwallet/wallet/udb"
 )
 
 // Worst case script and input/output size estimates.

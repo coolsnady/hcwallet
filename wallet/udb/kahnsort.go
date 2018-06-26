@@ -6,7 +6,7 @@
 package udb
 
 import (
-	"github.com/coolsnady/hxd/chaincfg/chainhash"
+	"github.com/coolsnady/hcd/chaincfg/chainhash"
 )
 
 type graphNode struct {

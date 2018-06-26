@@ -10,17 +10,17 @@ import (
 	"context"
 	"sync"
 
-	"github.com/coolsnady/hxd/blockchain"
-	"github.com/coolsnady/hxd/blockchain/stake"
-	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/txscript"
-	"github.com/coolsnady/hxd/wire"
-	hxutil "github.com/coolsnady/hxd/hxutil"
-	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
-	"github.com/coolsnady/hxd/hdkeychain"
-	"github.com/coolsnady/hxwallet/apperrors"
-	"github.com/coolsnady/hxwallet/wallet/udb"
-	"github.com/coolsnady/hxwallet/walletdb"
+	"github.com/coolsnady/hcd/blockchain"
+	"github.com/coolsnady/hcd/blockchain/stake"
+	"github.com/coolsnady/hcd/chaincfg/chainhash"
+	"github.com/coolsnady/hcd/txscript"
+	"github.com/coolsnady/hcd/wire"
+	dcrutil "github.com/coolsnady/hcutil"
+	hcrpcclient "github.com/coolsnady/hcrpcclient"
+	"github.com/coolsnady/hcutil/hdkeychain"
+	"github.com/coolsnady/hcwallet/apperrors"
+	"github.com/coolsnady/hcwallet/wallet/udb"
+	"github.com/coolsnady/hcwallet/walletdb"
 )
 
 // TODO: It would be good to send errors during notification creation to the rpc
@@ -85,7 +85,7 @@ func lookupInputAccount(dbtx walletdb.ReadTx, w *Wallet, details *udb.TxDetails,
 }
 
 func lookupOutputChain(dbtx walletdb.ReadTx, w *Wallet, details *udb.TxDetails,
-	cred udb.CreditRecord) (account uint32, internal bool, address hxutil.Address,
+	cred udb.CreditRecord) (account uint32, internal bool, address dcrutil.Address,
 	amount int64, outputScript []byte) {
 
 	addrmgrNs := dbtx.ReadBucket(waddrmgrNamespaceKey)
@@ -119,13 +119,13 @@ func makeTxSummary(dbtx walletdb.ReadTx, w *Wallet, details *udb.TxDetails) Tran
 		}
 		serializedTx = buf.Bytes()
 	}
-	var fee hxutil.Amount
+	var fee dcrutil.Amount
 	if len(details.Debits) == len(details.MsgTx.TxIn) {
 		for _, deb := range details.Debits {
 			fee += deb.Amount
 		}
 		for _, txOut := range details.MsgTx.TxOut {
-			fee -= hxutil.Amount(txOut.Value)
+			fee -= dcrutil.Amount(txOut.Value)
 		}
 	}
 	var inputs []TransactionSummaryInput
@@ -151,7 +151,7 @@ func makeTxSummary(dbtx walletdb.ReadTx, w *Wallet, details *udb.TxDetails) Tran
 			Index:        uint32(i),
 			Account:      acct,
 			Internal:     internal,
-			Amount:       hxutil.Amount(amount),
+			Amount:       dcrutil.Amount(amount),
 			Address:      address,
 			OutputScript: outputScript,
 		}
@@ -177,7 +177,7 @@ func makeTxSummary(dbtx walletdb.ReadTx, w *Wallet, details *udb.TxDetails) Tran
 	}
 }
 
-func makeTicketSummary(chainClient *dcrrpcclient.Client, dbtx walletdb.ReadTx, w *Wallet, details *udb.TicketDetails) *TicketSummary {
+func makeTicketSummary(chainClient *hcrpcclient.Client, dbtx walletdb.ReadTx, w *Wallet, details *udb.TicketDetails) *TicketSummary {
 	var ticketStatus = TicketStatusLive
 
 	ticketTransactionDetails := makeTxSummary(dbtx, w, details.Ticket)
@@ -229,7 +229,7 @@ func makeTicketSummary(chainClient *dcrrpcclient.Client, dbtx walletdb.ReadTx, w
 	}
 }
 
-func totalBalances(dbtx walletdb.ReadTx, w *Wallet, m map[uint32]hxutil.Amount) error {
+func totalBalances(dbtx walletdb.ReadTx, w *Wallet, m map[uint32]dcrutil.Amount) error {
 	addrmgrNs := dbtx.ReadBucket(waddrmgrNamespaceKey)
 	unspent, err := w.TxStore.UnspentOutputs(dbtx.ReadBucket(wtxmgrNamespaceKey))
 	if err != nil {
@@ -253,7 +253,7 @@ func totalBalances(dbtx walletdb.ReadTx, w *Wallet, m map[uint32]hxutil.Amount) 
 	return nil
 }
 
-func flattenBalanceMap(m map[uint32]hxutil.Amount) []AccountBalance {
+func flattenBalanceMap(m map[uint32]dcrutil.Amount) []AccountBalance {
 	s := make([]AccountBalance, 0, len(m))
 	for k, v := range m {
 		s = append(s, AccountBalance{Account: k, TotalBalance: v})
@@ -261,7 +261,7 @@ func flattenBalanceMap(m map[uint32]hxutil.Amount) []AccountBalance {
 	return s
 }
 
-func relevantAccounts(w *Wallet, m map[uint32]hxutil.Amount, txs []TransactionSummary) {
+func relevantAccounts(w *Wallet, m map[uint32]dcrutil.Amount, txs []TransactionSummary) {
 	for _, tx := range txs {
 		for _, d := range tx.MyInputs {
 			m[d.PreviousAccount] = 0
@@ -292,7 +292,7 @@ func (s *NotificationServer) notifyUnminedTransaction(dbtx walletdb.ReadTx, deta
 		log.Errorf("Cannot fetch unmined transaction hashes: %v", err)
 		return
 	}
-	bals := make(map[uint32]hxutil.Amount)
+	bals := make(map[uint32]dcrutil.Amount)
 	relevantAccounts(s.wallet, bals, unminedTxs)
 	err = totalBalances(dbtx, s.wallet, bals)
 	if err != nil {
@@ -364,7 +364,7 @@ func (s *NotificationServer) sendAttachedBlockNotification() {
 
 	var (
 		w             = s.wallet
-		bals          = make(map[uint32]hxutil.Amount)
+		bals          = make(map[uint32]dcrutil.Amount)
 		unminedHashes []*chainhash.Hash
 	)
 	err := walletdb.View(w.db, func(dbtx walletdb.ReadTx) error {
@@ -468,7 +468,7 @@ type TransactionSummary struct {
 	Transaction []byte
 	MyInputs    []TransactionSummaryInput
 	MyOutputs   []TransactionSummaryOutput
-	Fee         hxutil.Amount
+	Fee         dcrutil.Amount
 	Timestamp   int64
 	Type        TransactionType
 }
@@ -503,11 +503,11 @@ const (
 func TxTransactionType(tx *wire.MsgTx) TransactionType {
 	if blockchain.IsCoinBaseTx(tx) {
 		return TransactionTypeCoinbase
-	} else if ok := stake.IsSStx(tx); ok {
+	} else if ok, _ := stake.IsSStx(tx); ok {
 		return TransactionTypeTicketPurchase
-	} else if ok = stake.IsSSGen(tx); ok {
+	} else if ok, _ = stake.IsSSGen(tx); ok {
 		return TransactionTypeVote
-	} else if ok = stake.IsSSRtx(tx); ok {
+	} else if ok, _ = stake.IsSSRtx(tx); ok {
 		return TransactionTypeRevocation
 	} else {
 		return TransactionTypeRegular
@@ -521,7 +521,7 @@ func TxTransactionType(tx *wire.MsgTx) TransactionType {
 type TransactionSummaryInput struct {
 	Index           uint32
 	PreviousAccount uint32
-	PreviousAmount  hxutil.Amount
+	PreviousAmount  dcrutil.Amount
 }
 
 // TransactionSummaryOutput describes wallet properties of a transaction output
@@ -531,8 +531,8 @@ type TransactionSummaryOutput struct {
 	Index        uint32
 	Account      uint32
 	Internal     bool
-	Amount       hxutil.Amount
-	Address      hxutil.Address
+	Amount       dcrutil.Amount
+	Address      dcrutil.Address
 	OutputScript []byte
 }
 
@@ -542,7 +542,7 @@ type TransactionSummaryOutput struct {
 // so they are not included.
 type AccountBalance struct {
 	Account      uint32
-	TotalBalance hxutil.Amount
+	TotalBalance dcrutil.Amount
 }
 
 // TransactionNotificationsClient receives TransactionNotifications from the

@@ -9,11 +9,11 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/coolsnady/hxd/blockchain/stake"
-	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/wire"
-	"github.com/coolsnady/hxwallet/apperrors"
-	"github.com/coolsnady/hxwallet/walletdb"
+	"github.com/coolsnady/hcd/blockchain/stake"
+	"github.com/coolsnady/hcd/chaincfg/chainhash"
+	"github.com/coolsnady/hcd/wire"
+	"github.com/coolsnady/hcwallet/apperrors"
+	"github.com/coolsnady/hcwallet/walletdb"
 )
 
 // InsertMemPoolTx inserts a memory pool transaction record.  It also marks
@@ -64,7 +64,11 @@ func (s *Store) InsertMemPoolTx(ns walletdb.ReadWriteBucket, rec *TxRecord) erro
 				if stake.DetermineTxType(&spenderTx) != stake.TxTypeSSGen {
 					break RevocationCheck
 				}
-				votedBlock, _ := stake.SSGenBlockVotedOn(&spenderTx)
+				votedBlock, _, err := stake.SSGenBlockVotedOn(&spenderTx)
+				if err != nil {
+					const str = "failed to determine voted block"
+					return apperrors.Wrap(err, apperrors.ErrData, str)
+				}
 				tipBlock, _ := s.MainChainTip(ns)
 				if votedBlock == tipBlock {
 					const str = "revocation double spends unmined vote on " +

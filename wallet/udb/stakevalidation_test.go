@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coolsnady/hxd/wire"
-	hxutil "github.com/coolsnady/hxd/hxutil"
-	"github.com/coolsnady/hxwallet/walletdb"
-	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
+	"github.com/coolsnady/hcd/wire"
+	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcwallet/walletdb"
+	_ "github.com/coolsnady/hcwallet/walletdb/bdb"
 )
 
 func TestStakeInvalidationOfTip(t *testing.T) {
@@ -22,8 +22,8 @@ func TestStakeInvalidationOfTip(t *testing.T) {
 	}
 
 	g := makeBlockGenerator()
-	block1Header := g.generate(hxutil.BlockValid)
-	block2Header := g.generate(hxutil.BlockValid)
+	block1Header := g.generate(dcrutil.BlockValid)
+	block2Header := g.generate(dcrutil.BlockValid)
 	block3Header := g.generate(0)
 
 	block1Tx := wire.MsgTx{
@@ -93,8 +93,8 @@ func TestStakeInvalidationOfTip(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if bal.Total != hxutil.Amount(block2Tx.TxOut[0].Value) {
-			t.Errorf("Wrong balance: expected %v got %v", hxutil.Amount(block2Tx.TxOut[0].Value), bal)
+		if bal.Total != dcrutil.Amount(block2Tx.TxOut[0].Value) {
+			t.Errorf("Wrong balance: expected %v got %v", dcrutil.Amount(block2Tx.TxOut[0].Value), bal)
 		}
 		credits, err := s.UnspentOutputs(ns)
 		if err != nil {
@@ -108,7 +108,7 @@ func TestStakeInvalidationOfTip(t *testing.T) {
 			t.Errorf("Credit hash does match tx from block 2")
 			return nil
 		}
-		if credits[0].Amount != hxutil.Amount(block2Tx.TxOut[0].Value) {
+		if credits[0].Amount != dcrutil.Amount(block2Tx.TxOut[0].Value) {
 			t.Errorf("Credit value does not match tx output 0 from block 2")
 			return nil
 		}
@@ -135,8 +135,8 @@ func TestStakeInvalidationOfTip(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if bal.Total != hxutil.Amount(block1Tx.TxOut[0].Value) {
-			t.Errorf("Wrong balance: expected %v got %v", hxutil.Amount(block1Tx.TxOut[0].Value), bal)
+		if bal.Total != dcrutil.Amount(block1Tx.TxOut[0].Value) {
+			t.Errorf("Wrong balance: expected %v got %v", dcrutil.Amount(block1Tx.TxOut[0].Value), bal)
 		}
 		credits, err = s.UnspentOutputs(ns)
 		if err != nil {
@@ -150,7 +150,7 @@ func TestStakeInvalidationOfTip(t *testing.T) {
 			t.Errorf("Credit hash does not match tx from block 1")
 			return nil
 		}
-		if credits[0].Amount != hxutil.Amount(block1Tx.TxOut[0].Value) {
+		if credits[0].Amount != dcrutil.Amount(block1Tx.TxOut[0].Value) {
 			t.Errorf("Credit value does not match tx output 0 from block 1")
 			return nil
 		}
@@ -170,8 +170,8 @@ func TestStakeInvalidationTxInsert(t *testing.T) {
 	}
 
 	g := makeBlockGenerator()
-	block1Header := g.generate(hxutil.BlockValid)
-	block2Header := g.generate(hxutil.BlockValid)
+	block1Header := g.generate(dcrutil.BlockValid)
+	block2Header := g.generate(dcrutil.BlockValid)
 	block3Header := g.generate(0)
 
 	block1Tx := wire.MsgTx{
@@ -225,15 +225,15 @@ func TestStakeInvalidationTxInsert(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if bal.Total != hxutil.Amount(block1Tx.TxOut[0].Value) {
-			t.Errorf("Wrong balance: expected %v got %v", hxutil.Amount(block1Tx.TxOut[0].Value), bal)
+		if bal.Total != dcrutil.Amount(block1Tx.TxOut[0].Value) {
+			t.Errorf("Wrong balance: expected %v got %v", dcrutil.Amount(block1Tx.TxOut[0].Value), bal)
 		}
 		bal, err = s.AccountBalance(ns, addrmgrNs, 1, 0)
 		if err != nil {
 			return err
 		}
-		if bal.Total != hxutil.Amount(block1Tx.TxOut[0].Value) {
-			t.Errorf("Wrong balance: expected %v got %v", hxutil.Amount(block1Tx.TxOut[0].Value), bal)
+		if bal.Total != dcrutil.Amount(block1Tx.TxOut[0].Value) {
+			t.Errorf("Wrong balance: expected %v got %v", dcrutil.Amount(block1Tx.TxOut[0].Value), bal)
 		}
 		credits, err := s.UnspentOutputs(ns)
 		if err != nil {
@@ -247,7 +247,7 @@ func TestStakeInvalidationTxInsert(t *testing.T) {
 			t.Errorf("Credit hash does not match tx from block 1")
 			return nil
 		}
-		if credits[0].Amount != hxutil.Amount(block1Tx.TxOut[0].Value) {
+		if credits[0].Amount != dcrutil.Amount(block1Tx.TxOut[0].Value) {
 			t.Errorf("Credit value does not match tx output 0 from block 1")
 			return nil
 		}

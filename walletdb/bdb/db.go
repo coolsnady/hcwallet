@@ -10,7 +10,7 @@ import (
 	"os"
 
 	"github.com/boltdb/bolt"
-	"github.com/coolsnady/hxwallet/walletdb"
+	"github.com/coolsnady/hcwallet/walletdb"
 )
 
 // convertErr converts some bolt errors to the equivalent walletdb error.

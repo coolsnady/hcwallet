@@ -7,17 +7,17 @@ package wallet
 import (
 	"errors"
 
-	hxutil "github.com/coolsnady/hxd/hxutil"
-	"github.com/coolsnady/hxwallet/wallet/udb"
-	"github.com/coolsnady/hxwallet/walletdb"
+	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcwallet/wallet/udb"
+	"github.com/coolsnady/hcwallet/walletdb"
 )
 
 // StakePoolUserInfo returns the stake pool user information for a user
 // identified by their P2SH voting address.
-func (w *Wallet) StakePoolUserInfo(userAddress hxutil.Address) (*udb.StakePoolUser, error) {
+func (w *Wallet) StakePoolUserInfo(userAddress dcrutil.Address) (*udb.StakePoolUser, error) {
 	switch userAddress.(type) {
-	case *hxutil.AddressPubKeyHash: // ok
-	case *hxutil.AddressScriptHash: // ok
+	case *dcrutil.AddressPubKeyHash: // ok
+	case *dcrutil.AddressScriptHash: // ok
 	default:
 		return nil, errors.New("stake pool user address must be P2PKH or P2SH")
 	}

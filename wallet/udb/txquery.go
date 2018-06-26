@@ -8,12 +8,12 @@ package udb
 import (
 	"fmt"
 
-	"github.com/coolsnady/hxd/blockchain/stake"
-	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/wire"
-	hxutil "github.com/coolsnady/hxd/hxutil"
-	"github.com/coolsnady/hxwallet/apperrors"
-	"github.com/coolsnady/hxwallet/walletdb"
+	"github.com/coolsnady/hcd/blockchain/stake"
+	"github.com/coolsnady/hcd/chaincfg/chainhash"
+	"github.com/coolsnady/hcd/wire"
+	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcwallet/apperrors"
+	"github.com/coolsnady/hcwallet/walletdb"
 )
 
 // CreditRecord contains metadata regarding a transaction credit for a known
@@ -21,7 +21,7 @@ import (
 // with the Index field.
 type CreditRecord struct {
 	Index      uint32
-	Amount     hxutil.Amount
+	Amount     dcrutil.Amount
 	Spent      bool
 	Change     bool
 	OpCode     uint8
@@ -32,7 +32,7 @@ type CreditRecord struct {
 // transaction.  Further details may be looked up by indexing a wire.MsgTx.TxIn
 // with the Index field.
 type DebitRecord struct {
-	Amount hxutil.Amount
+	Amount dcrutil.Amount
 	Index  uint32
 }
 
@@ -210,7 +210,7 @@ type TicketDetails struct {
 // a nil TicketDetiails is returned.
 func (s *Store) TicketDetails(ns walletdb.ReadBucket, txDetails *TxDetails) (*TicketDetails, error) {
 	var ticketDetails = &TicketDetails{}
-	ok := stake.IsSStx(&txDetails.MsgTx)
+	ok, _ := stake.IsSStx(&txDetails.MsgTx)
 	if !ok {
 		return nil, nil
 	}

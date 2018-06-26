@@ -30,31 +30,31 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-    "github.com/coolsnady/hxd/blockchain/stake"
-	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxd/chaincfg/chainec"
-	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/txscript"
-	"github.com/coolsnady/hxd/wire"
-	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
-	hxutil "github.com/coolsnady/hxd/hxutil"
-	"github.com/coolsnady/hxd/hdkeychain"
-	"github.com/coolsnady/hxwallet/apperrors"
-	"github.com/coolsnady/hxwallet/chain"
-	"github.com/coolsnady/hxwallet/internal/cfgutil"
-	h "github.com/coolsnady/hxwallet/internal/helpers"
-	"github.com/coolsnady/hxwallet/internal/zero"
-	"github.com/coolsnady/hxwallet/loader"
-	"github.com/coolsnady/hxwallet/netparams"
-    "github.com/coolsnady/hxwallet/rpc/legacyrpc"
-	pb "github.com/coolsnady/hxwallet/rpc/walletrpc"
-	"github.com/coolsnady/hxwallet/ticketbuyer"
-	"github.com/coolsnady/hxwallet/wallet"
-	"github.com/coolsnady/hxwallet/wallet/txauthor"
-	"github.com/coolsnady/hxwallet/wallet/txrules"
-	"github.com/coolsnady/hxwallet/wallet/udb"
-	"github.com/coolsnady/hxwallet/walletdb"
-	"github.com/coolsnady/hxwallet/walletseed"
+    "github.com/coolsnady/hcd/blockchain/stake"
+	"github.com/coolsnady/hcd/chaincfg"
+	"github.com/coolsnady/hcd/chaincfg/chainec"
+	"github.com/coolsnady/hcd/chaincfg/chainhash"
+	"github.com/coolsnady/hcd/txscript"
+	"github.com/coolsnady/hcd/wire"
+	hcrpcclient "github.com/coolsnady/hcrpcclient"
+	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcutil/hdkeychain"
+	"github.com/coolsnady/hcwallet/apperrors"
+	"github.com/coolsnady/hcwallet/chain"
+	"github.com/coolsnady/hcwallet/internal/cfgutil"
+	h "github.com/coolsnady/hcwallet/internal/helpers"
+	"github.com/coolsnady/hcwallet/internal/zero"
+	"github.com/coolsnady/hcwallet/loader"
+	"github.com/coolsnady/hcwallet/netparams"
+    "github.com/coolsnady/hcwallet/rpc/legacyrpc"
+	pb "github.com/coolsnady/hcwallet/rpc/walletrpc"
+	"github.com/coolsnady/hcwallet/ticketbuyer"
+	"github.com/coolsnady/hcwallet/wallet"
+	"github.com/coolsnady/hcwallet/wallet/txauthor"
+	"github.com/coolsnady/hcwallet/wallet/txrules"
+	"github.com/coolsnady/hcwallet/wallet/udb"
+	"github.com/coolsnady/hcwallet/walletdb"
+	"github.com/coolsnady/hcwallet/walletseed"
 )
 
 // Public API version constants
@@ -124,9 +124,9 @@ func errorCode(err error) codes.Code {
 
 // decodeAddress decodes an address and verifies it is intended for the active
 // network.  This should be used preferred to direct usage of
-// hxutil.DecodeAddress, which does not perform the network check.
-func decodeAddress(a string, params *chaincfg.Params) (hxutil.Address, error) {
-	addr, err := hxutil.DecodeAddress(a)
+// dcrutil.DecodeAddress, which does not perform the network check.
+func decodeAddress(a string, params *chaincfg.Params) (dcrutil.Address, error) {
+	addr, err := dcrutil.DecodeAddress(a)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid address %v: %v", a, err)
 	}
@@ -160,7 +160,7 @@ type walletServer struct {
 }
 
 // loaderServer provides RPC clients with the ability to load and close wallets,
-// as well as establishing a RPC connection to a dcrd consensus server.
+// as well as establishing a RPC connection to a hcd consensus server.
 type loaderServer struct {
 	ready     uint32 // atomic
 	loader    *loader.Loader
@@ -283,7 +283,7 @@ func (s *walletServer) checkReady() bool {
 
 // requireChainClient checks whether the wallet has been associated with the
 // consensus server RPC client, returning a gRPC error when it is not.
-func (s *walletServer) requireChainClient() (*dcrrpcclient.Client, error) {
+func (s *walletServer) requireChainClient() (*hcrpcclient.Client, error) {
 	chainClient := s.wallet.ChainClient()
 	if chainClient == nil {
 		return nil, status.Errorf(codes.FailedPrecondition,
@@ -435,7 +435,7 @@ func (s *walletServer) NextAddress(ctx context.Context, req *pb.NextAddressReque
 	}
 
 	var (
-		addr hxutil.Address
+		addr dcrutil.Address
         pubKeyFinal string
 		err  error
         acctType pb.NextAddressResponse_AccountType
@@ -484,7 +484,7 @@ func (s *walletServer) NextAddress(ctx context.Context, req *pb.NextAddressReque
             return nil, translateError(err)
         }
 
-        pubKeyAddr, err := hxutil.NewAddressBlissPubKey(pubKeyBytes, s.wallet.ChainParams())
+        pubKeyAddr, err := dcrutil.NewAddressBlissPubKey(pubKeyBytes, s.wallet.ChainParams())
         if err != nil {
             return nil, translateError(err)
         }
@@ -495,7 +495,7 @@ func (s *walletServer) NextAddress(ctx context.Context, req *pb.NextAddressReque
     	if err != nil {
     		return nil, translateError(err)
     	}
-    	pubKeyAddr, err := hxutil.NewAddressSecpPubKey(pubKey.Serialize(), s.wallet.ChainParams())
+    	pubKeyAddr, err := dcrutil.NewAddressSecpPubKey(pubKey.Serialize(), s.wallet.ChainParams())
     	if err != nil {
     		return nil, translateError(err)
     	}
@@ -515,7 +515,7 @@ func (s *walletServer) ImportPrivateKey(ctx context.Context, req *pb.ImportPriva
 
 	defer zero.Bytes(req.Passphrase)
 
-	wif, err := hxutil.DecodeWIF(req.PrivateKeyWif)
+	wif, err := dcrutil.DecodeWIF(req.PrivateKeyWif)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"Invalid WIF-encoded private key: %v", err)
@@ -626,7 +626,7 @@ func (s *walletServer) ImportScript(ctx context.Context,
 		s.wallet.RescanFromHeight(chainClient, req.ScanFrom)
 	}
 
-	p2sh, err := hxutil.NewAddressScriptHash(req.Script, s.wallet.ChainParams())
+	p2sh, err := dcrutil.NewAddressScriptHash(req.Script, s.wallet.ChainParams())
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -747,7 +747,7 @@ func (s *walletServer) FundTransaction(ctx context.Context, req *pb.FundTransact
 		Account:               req.Account,
 		RequiredConfirmations: req.RequiredConfirmations,
 	}
-	totalAmount, inputs, scripts, err := s.wallet.SelectInputs(hxutil.Amount(req.TargetAmount), policy)
+	totalAmount, inputs, scripts, err := s.wallet.SelectInputs(dcrutil.Amount(req.TargetAmount), policy)
 	// Do not return errors to caller when there was insufficient spendable
 	// outputs available for the target amount.
 	switch err.(type) {
@@ -774,7 +774,7 @@ func (s *walletServer) FundTransaction(ctx context.Context, req *pb.FundTransact
 	}
 
 	var changeScript []byte
-	if req.IncludeChangeScript && totalAmount > hxutil.Amount(req.TargetAmount) {
+	if req.IncludeChangeScript && totalAmount > dcrutil.Amount(req.TargetAmount) {
 		changeAddr, err := s.wallet.NewChangeAddress(req.Account)
 		if err != nil {
 			return nil, translateError(err)
@@ -856,7 +856,7 @@ func (s *walletServer) ConstructTransaction(ctx context.Context, req *pb.Constru
 
 	feePerKb := txrules.DefaultRelayFeePerKb
 	if req.FeePerKb != 0 {
-		feePerKb = hxutil.Amount(req.FeePerKb)
+		feePerKb = dcrutil.Amount(req.FeePerKb)
 	}
 
 	var changeSource txauthor.ChangeSource
@@ -1196,7 +1196,7 @@ func (s *walletServer) PurchaseTickets(ctx context.Context,
 	req *pb.PurchaseTicketsRequest) (*pb.PurchaseTicketsResponse, error) {
 	// Unmarshall the received data and prepare it as input for the ticket
 	// purchase request.
-	spendLimit := hxutil.Amount(req.SpendLimit)
+	spendLimit := dcrutil.Amount(req.SpendLimit)
 	if spendLimit < 0 {
 		return nil, status.Errorf(codes.InvalidArgument,
 			"Negative spend limit given")
@@ -1205,7 +1205,7 @@ func (s *walletServer) PurchaseTickets(ctx context.Context,
 	minConf := int32(req.RequiredConfirmations)
 	params := s.wallet.ChainParams()
 
-	var ticketAddr hxutil.Address
+	var ticketAddr dcrutil.Address
 	var err error
 	if req.TicketAddress != "" {
 		ticketAddr, err = decodeAddress(req.TicketAddress, params)
@@ -1214,7 +1214,7 @@ func (s *walletServer) PurchaseTickets(ctx context.Context,
 		}
 	}
 
-	var poolAddr hxutil.Address
+	var poolAddr dcrutil.Address
 	if req.PoolAddress != "" {
 		poolAddr, err = decodeAddress(req.PoolAddress, params)
 		if err != nil {
@@ -1247,8 +1247,8 @@ func (s *walletServer) PurchaseTickets(ctx context.Context,
 	}
 
 	expiry := int32(req.Expiry)
-	txFee := hxutil.Amount(req.TxFee)
-	ticketFee := hxutil.Amount(req.TicketFee)
+	txFee := dcrutil.Amount(req.TxFee)
+	ticketFee := dcrutil.Amount(req.TicketFee)
 
 	if txFee < 0 || ticketFee < 0 {
 		return nil, status.Errorf(codes.InvalidArgument,
@@ -1335,8 +1335,8 @@ func (s *walletServer) SignMessage(cts context.Context, req *pb.SignMessageReque
 	// Addresses must have an associated secp256k1 private key and therefore
 	// must be P2PK or P2PKH (P2SH is not allowed).
 	switch a := addr.(type) {
-	case *hxutil.AddressSecpPubKey:
-	case *hxutil.AddressPubKeyHash:
+	case *dcrutil.AddressSecpPubKey:
+	case *dcrutil.AddressPubKeyHash:
 		if a.DSA(a.Net()) != chainec.ECTypeSecp256k1 {
 			goto WrongAddrKind
 		}
@@ -1399,14 +1399,14 @@ func (s *walletServer) ValidateAddress(ctx context.Context, req *pb.ValidateAddr
 			return nil, err
 		}
 		if len(pubKeyBytes) == 897 {
-			pubKeyAddr, err := hxutil.NewAddressBlissPubKey(pubKeyBytes,
+			pubKeyAddr, err := dcrutil.NewAddressBlissPubKey(pubKeyBytes,
 				s.wallet.ChainParams())
 			if err != nil {
 				return nil, err
 			}
 			result.PubKeyAddr = pubKeyAddr.String()
 		} else {
-			pubKeyAddr, err := hxutil.NewAddressSecpPubKey(pubKeyBytes,
+			pubKeyAddr, err := dcrutil.NewAddressSecpPubKey(pubKeyBytes,
 				s.wallet.ChainParams())
 			if err != nil {
 				return nil, err
@@ -1758,7 +1758,7 @@ func (t *ticketbuyerServer) StartAutoBuyer(ctx context.Context, req *pb.StartAut
 	}
 	params := wallet.ChainParams()
 
-	var votingAddress hxutil.Address
+	var votingAddress dcrutil.Address
 	if req.VotingAddress != "" {
 		votingAddress, err = decodeAddress(req.VotingAddress, params)
 		if err != nil {
@@ -1766,7 +1766,7 @@ func (t *ticketbuyerServer) StartAutoBuyer(ctx context.Context, req *pb.StartAut
 		}
 	}
 
-	var poolAddress hxutil.Address
+	var poolAddress dcrutil.Address
 	if req.PoolAddress != "" {
 		poolAddress, err = decodeAddress(req.PoolAddress, params)
 		if err != nil {
@@ -1934,9 +1934,9 @@ func (s *loaderServer) StartConsensusRpc(ctx context.Context, req *pb.StartConse
 		return nil, translateError(err)
 	}
 
-	err = rpcClient.Start(ctx,false)
+	err = rpcClient.Start()
 	if err != nil {
-		if err == dcrrpcclient.ErrInvalidAuth {
+		if err == hcrpcclient.ErrInvalidAuth {
 			return nil, status.Errorf(codes.InvalidArgument,
 				"Invalid RPC credentials: %v", err)
 		}
@@ -2426,7 +2426,7 @@ func (s *messageVerificationServer) VerifyMessage(ctx context.Context, req *pb.V
 
 	var valid bool
 
-	addr, err := hxutil.DecodeAddress(req.Address)
+	addr, err := dcrutil.DecodeAddress(req.Address)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -2434,8 +2434,8 @@ func (s *messageVerificationServer) VerifyMessage(ctx context.Context, req *pb.V
 	// Addresses must have an associated secp256k1 private key and therefore
 	// must be P2PK or P2PKH (P2SH is not allowed).
 	switch a := addr.(type) {
-	case *hxutil.AddressSecpPubKey:
-	case *hxutil.AddressPubKeyHash:
+	case *dcrutil.AddressSecpPubKey:
+	case *dcrutil.AddressPubKeyHash:
 		if a.DSA(a.Net()) != chainec.ECTypeSecp256k1 {
 			goto WrongAddrKind
 		}
@@ -2496,11 +2496,11 @@ func marshalDecodedTxOutputs(mtx *wire.MsgTx, chainParams *chaincfg.Params) []*p
 		// the case of stake submission transactions, the odd outputs
 		// contain a commitment address, so detect that case
 		// accordingly.
-		var addrs []hxutil.Address
+		var addrs []dcrutil.Address
 		var encodedAddrs []string
 		var scriptClass txscript.ScriptClass
 		var reqSigs int
-		var commitAmt *hxutil.Amount
+		var commitAmt *dcrutil.Amount
 
 		if (txType == stake.TxTypeSStx) && (stake.IsStakeSubmissionTxOut(i)) {
 

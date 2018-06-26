@@ -13,15 +13,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxd/wire"
-	"github.com/coolsnady/hxd/hdkeychain"
-	"github.com/coolsnady/hxwallet/internal/prompt"
-	"github.com/coolsnady/hxwallet/loader"
-	"github.com/coolsnady/hxwallet/wallet"
-	"github.com/coolsnady/hxwallet/walletdb"
-	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
-	"github.com/coolsnady/hxwallet/walletseed"
+	"github.com/coolsnady/hcd/chaincfg"
+	"github.com/coolsnady/hcd/wire"
+	"github.com/coolsnady/hcutil/hdkeychain"
+	"github.com/coolsnady/hcwallet/internal/prompt"
+	"github.com/coolsnady/hcwallet/loader"
+	"github.com/coolsnady/hcwallet/wallet"
+	"github.com/coolsnady/hcwallet/walletdb"
+	_ "github.com/coolsnady/hcwallet/walletdb/bdb"
+	"github.com/coolsnady/hcwallet/walletseed"
 )
 
 // networkDir returns the directory name of a network directory to hold wallet

@@ -10,13 +10,13 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/coolsnady/hxd/chaincfg"
-	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
-	hxutil "github.com/coolsnady/hxd/hxutil"
-	"github.com/coolsnady/hxwallet/ticketbuyer"
-	"github.com/coolsnady/hxwallet/wallet"
-	"github.com/coolsnady/hxwallet/walletdb"
-	_ "github.com/coolsnady/hxwallet/walletdb/bdb" // driver loaded during init
+	"github.com/coolsnady/hcd/chaincfg"
+	hcrpcclient "github.com/coolsnady/hcrpcclient"
+	dcrutil "github.com/coolsnady/hcutil"
+	"github.com/coolsnady/hcwallet/ticketbuyer"
+	"github.com/coolsnady/hcwallet/wallet"
+	"github.com/coolsnady/hcwallet/walletdb"
+	_ "github.com/coolsnady/hcwallet/walletdb/bdb" // driver loaded during init
 )
 
 const (
@@ -32,7 +32,7 @@ const (
 // Loader is safe for concurrent access.
 type Loader struct {
 	callbacks   []func(*wallet.Wallet)
-	chainClient *dcrrpcclient.Client
+	chainClient *hcrpcclient.Client
 	chainParams *chaincfg.Params
 	dbDirPath   string
 	wallet      *wallet.Wallet
@@ -53,8 +53,8 @@ type StakeOptions struct {
 	VotingEnabled           bool
 	TicketFee               float64
 	AddressReuse            bool
-	TicketAddress           hxutil.Address
-	PoolAddress             hxutil.Address
+	TicketAddress           dcrutil.Address
+	PoolAddress             dcrutil.Address
 	PoolFees                float64
 	StakePoolColdExtKey     string
 }
@@ -264,7 +264,7 @@ func (l *Loader) UnloadWallet() error {
 }
 
 // SetChainClient sets the chain server client.
-func (l *Loader) SetChainClient(chainClient *dcrrpcclient.Client) {
+func (l *Loader) SetChainClient(chainClient *hcrpcclient.Client) {
 	l.mu.Lock()
 	l.chainClient = chainClient
 	l.mu.Unlock()

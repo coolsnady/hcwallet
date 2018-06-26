@@ -8,13 +8,12 @@ package chain
 import (
 	"errors"
 	"fmt"
-	"context"
 	"sync"
 	"time"
 
-	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
+	"github.com/coolsnady/hcd/chaincfg"
+	"github.com/coolsnady/hcd/chaincfg/chainhash"
+	hcrpcclient "github.com/coolsnady/hcrpcclient"
 )
 
 var requiredChainServerAPI = semver{major: 3, minor: 1, patch: 0}
@@ -22,8 +21,8 @@ var requiredChainServerAPI = semver{major: 3, minor: 1, patch: 0}
 // RPCClient represents a persistent client connection to a decred RPC server
 // for information regarding the current best block chain.
 type RPCClient struct {
-	*dcrrpcclient.Client
-	connConfig        *dcrrpcclient.ConnConfig // Work around unexported field
+	*hcrpcclient.Client
+	connConfig        *hcrpcclient.ConnConfig // Work around unexported field
 	chainParams       *chaincfg.Params
 	reconnectAttempts int
 
@@ -52,7 +51,7 @@ func NewRPCClient(chainParams *chaincfg.Params, connect, user, pass string, cert
 	}
 
 	client := &RPCClient{
-		connConfig: &dcrrpcclient.ConnConfig{
+		connConfig: &hcrpcclient.ConnConfig{
 			Host:                 connect,
 			Endpoint:             "ws",
 			User:                 user,
@@ -70,7 +69,7 @@ func NewRPCClient(chainParams *chaincfg.Params, connect, user, pass string, cert
 		dequeueVotingNotification: make(chan interface{}),
 		quit: make(chan struct{}),
 	}
-	ntfnCallbacks := &dcrrpcclient.NotificationHandlers{
+	ntfnCallbacks := &hcrpcclient.NotificationHandlers{
 		OnClientConnected:       client.onClientConnect,
 		OnBlockConnected:        client.onBlockConnected,
 		OnBlockDisconnected:     client.onBlockDisconnected,
@@ -80,7 +79,7 @@ func NewRPCClient(chainParams *chaincfg.Params, connect, user, pass string, cert
 		OnSpentAndMissedTickets: client.onSpentAndMissedTickets,
 		OnStakeDifficulty:       client.onStakeDifficulty,
 	}
-	rpcClient, err := dcrrpcclient.New(client.connConfig, ntfnCallbacks)
+	rpcClient, err := hcrpcclient.New(client.connConfig, ntfnCallbacks)
 	if err != nil {
 		return nil, err
 	}
@@ -93,8 +92,8 @@ func NewRPCClient(chainParams *chaincfg.Params, connect, user, pass string, cert
 // sent by the server.  After a limited number of connection attempts, this
 // function gives up, and therefore will not block forever waiting for the
 // connection to be established to a server that may not exist.
-func (c *RPCClient) Start(ctx context.Context, retry bool) (err error) {
-	err = c.Connect(ctx, retry)
+func (c *RPCClient) Start() (err error) {
+	err = c.Connect(c.reconnectAttempts)
 	if err != nil {
 		return err
 	}
@@ -118,7 +117,7 @@ func (c *RPCClient) Start(ctx context.Context, retry bool) (err error) {
 	var serverAPI semver
 	versions, err := c.Version()
 	if err == nil {
-		versionResult := versions["hxdjsonrpcapi"]
+		versionResult := versions["dcrdjsonrpcapi"]
 		serverAPI = semver{
 			major: versionResult.Major,
 			minor: versionResult.Minor,
@@ -168,7 +167,7 @@ func (c *RPCClient) WaitForShutdown() {
 
 // Notification types.  These are defined here and processed from from reading
 // a notificationChan to avoid handling these notifications directly in
-// dcrrpcclient callbacks, which isn't very Go-like and doesn't allow
+// hcrpcclient callbacks, which isn't very Go-like and doesn't allow
 // blocking client calls.
 type (
 	// ClientConnected is a notification for when a client connection is
@@ -410,7 +409,7 @@ out:
 			//
 			// TODO: A minute timeout is used to prevent the handler loop from
 			// blocking here forever, but this is much larger than it needs to
-			// be due to dcrd processing websocket requests synchronously (see
+			// be due to hcd processing websocket requests synchronously (see
 			// https://github.com/btcsuite/btcd/issues/504).  Decrease this to
 			// something saner like 3s when the above issue is fixed.
 			type sessionResult struct {
@@ -499,9 +498,9 @@ out:
 	c.wg.Done()
 }
 
-// POSTClient creates the equivalent HTTP POST dcrrpcclient.Client.
-func (c *RPCClient) POSTClient() (*dcrrpcclient.Client, error) {
+// POSTClient creates the equivalent HTTP POST hcrpcclient.Client.
+func (c *RPCClient) POSTClient() (*hcrpcclient.Client, error) {
 	configCopy := *c.connConfig
 	configCopy.HTTPPostMode = true
-	return dcrrpcclient.New(&configCopy, nil)
+	return hcrpcclient.New(&configCopy, nil)
 }

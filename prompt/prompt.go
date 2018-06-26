@@ -3,8 +3,8 @@ package prompt
 import (
 	"bufio"
 
-	"github.com/coolsnady/hxwallet/internal/prompt"
-	"github.com/coolsnady/hxwallet/wallet"
+	"github.com/coolsnady/hcwallet/internal/prompt"
+	"github.com/coolsnady/hcwallet/wallet"
 )
 
 // Setup prompts for, from a buffered reader, the private and/or public

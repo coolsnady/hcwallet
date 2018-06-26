@@ -14,8 +14,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/coolsnady/hxwallet/walletdb"
-	_ "github.com/coolsnady/hxwallet/walletdb/bdb"
+	"github.com/coolsnady/hcwallet/walletdb"
+	_ "github.com/coolsnady/hcwallet/walletdb/bdb"
 )
 
 // dbType is the database type name for this driver.

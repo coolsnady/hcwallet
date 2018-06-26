@@ -5,9 +5,9 @@
 package udb
 
 import (
-	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxwallet/apperrors"
-	"github.com/coolsnady/hxwallet/walletdb"
+	"github.com/coolsnady/hcd/chaincfg"
+	"github.com/coolsnady/hcwallet/apperrors"
+	"github.com/coolsnady/hcwallet/walletdb"
 )
 
 // Open opens the database and returns various "manager" types that must be used

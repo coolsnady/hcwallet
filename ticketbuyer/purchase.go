@@ -6,9 +6,8 @@ package ticketbuyer
 
 import (
 	"sync"
-	"time"
 
-	"github.com/coolsnady/hxwallet/wallet"
+	"github.com/coolsnady/hcwallet/wallet"
 )
 
 // PurchaseManager is the main handler of websocket notifications to
@@ -82,19 +81,14 @@ out:
 				case <-quit:
 					return
 				}
-
-				defer close(s2) // defer unblocking next worker
-				blockHash := v.AttachedBlocks[len(v.AttachedBlocks)-1]
-				blockInfo, err := p.w.BlockInfo(wallet.NewBlockIdentifierFromHash(blockHash))
-				if err != nil {
-					log.Errorf("failed to get block info using block hash %s", blockHash.String())
-					return
+				// Purchase tickets for each attached block, not just for the
+				// update to the main chain.  This is probably not optimal but
+				// it matches how dcrticketbuyer worked.
+				for h := v.NewHeight - int32(len(v.AttachedBlocks)) + 1; h <= v.NewHeight; h++ {
+					p.purchase(int64(h))
 				}
 
-				// only try buying tickets on blocks 5 minutes old or less
-				if time.Now().Unix()-blockInfo.Timestamp <= int64(p.w.ChainParams().TargetTimePerBlock.Seconds()) {
-					p.purchase(int64(v.NewHeight))
-				}
+				close(s2) // unblock next worker
 			}(s1, s2)
 			s1, s2 = s2, make(chan struct{})
 		case <-quit:

@@ -10,15 +10,15 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/decred/slog"
-	dcrrpcclient "github.com/coolsnady/hxd/rpcclient"
-	"github.com/coolsnady/hxwallet/chain"
-	"github.com/coolsnady/hxwallet/loader"
-	"github.com/coolsnady/hxwallet/rpc/legacyrpc"
-	"github.com/coolsnady/hxwallet/rpc/rpcserver"
-	"github.com/coolsnady/hxwallet/ticketbuyer"
-	"github.com/coolsnady/hxwallet/wallet"
-	"github.com/coolsnady/hxwallet/wallet/udb"
+	"github.com/btcsuite/btclog"
+	hcrpcclient "github.com/coolsnady/hcrpcclient"
+	"github.com/coolsnady/hcwallet/chain"
+	"github.com/coolsnady/hcwallet/loader"
+	"github.com/coolsnady/hcwallet/rpc/legacyrpc"
+	"github.com/coolsnady/hcwallet/rpc/rpcserver"
+	"github.com/coolsnady/hcwallet/ticketbuyer"
+	"github.com/coolsnady/hcwallet/wallet"
+	"github.com/coolsnady/hcwallet/wallet/udb"
 	"github.com/jrick/logrotate/rotator"
 )
 
@@ -44,7 +44,7 @@ var (
 	// backendLog is the logging backend used to create all subsystem loggers.
 	// The backend must not be used before the log rotator has been initialized,
 	// or data races and/or nil pointer dereferences will occur.
-	backendLog = slog.NewBackend(logWriter{})
+	backendLog = btclog.NewBackend(logWriter{})
 
 	// logRotator is one of the logging outputs.  It should be closed on
 	// application shutdown.
@@ -66,13 +66,13 @@ func init() {
 	udb.UseLogger(walletLog)
 	ticketbuyer.UseLogger(tkbyLog)
 	chain.UseLogger(chainLog)
-	dcrrpcclient.UseLogger(chainLog)
+	hcrpcclient.UseLogger(chainLog)
 	rpcserver.UseLogger(grpcLog)
 	legacyrpc.UseLogger(legacyRPCLog)
 }
 
 // subsystemLoggers maps each subsystem identifier to its associated logger.
-var subsystemLoggers = map[string]slog.Logger{
+var subsystemLoggers = map[string]btclog.Logger{
 	"HXW": log,
 	"LODR": loaderLog,
 	"WLLT": walletLog,
@@ -112,7 +112,7 @@ func setLogLevel(subsystemID string, logLevel string) {
 	}
 
 	// Defaults to info if the log level is invalid.
-	level, _ := slog.LevelFromString(logLevel)
+	level, _ := btclog.LevelFromString(logLevel)
 	logger.SetLevel(level)
 }
 

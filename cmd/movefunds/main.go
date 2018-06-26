@@ -26,11 +26,11 @@ import (
 	"os"
 	"sort"
 
-	"github.com/coolsnady/hxd/chaincfg"
-	"github.com/coolsnady/hxd/chaincfg/chainhash"
-	"github.com/coolsnady/hxd/hxjson"
-	"github.com/coolsnady/hxd/wire"
-	hxutil "github.com/coolsnady/hxd/hxutil"
+	"github.com/coolsnady/hcd/chaincfg"
+	"github.com/coolsnady/hcd/chaincfg/chainhash"
+	"github.com/coolsnady/hcd/dcrjson"
+	"github.com/coolsnady/hcd/wire"
+	dcrutil "github.com/coolsnady/hcutil"
 )
 
 // params is the global representing the chain parameters. It is assigned
@@ -68,7 +68,7 @@ func (e extendedOutPoints) Swap(i, j int) {
 // convertJSONUnspentToOutPoints converts a JSON raw dump from listunspent to
 // a set of UTXOs.
 func convertJSONUnspentToOutPoints(
-	utxos []hxjson.ListUnspentResult) []*extendedOutPoint {
+	utxos []dcrjson.ListUnspentResult) []*extendedOutPoint {
 	var eops []*extendedOutPoint
 	for _, utxo := range utxos {
 		if utxo.TxType == 1 && utxo.Vout == 0 {
@@ -89,7 +89,7 @@ func convertJSONUnspentToOutPoints(
 
 		eop := new(extendedOutPoint)
 		eop.op = op
-		amtCast, _ := hxutil.NewAmount(utxo.Amount)
+		amtCast, _ := dcrutil.NewAmount(utxo.Amount)
 		eop.amt = int64(amtCast)
 		eop.pkScript = pks
 
@@ -106,7 +106,7 @@ func main() {
 		fmt.Println("error opening unspent file unspent.json", err.Error())
 	}
 
-	var utxos []hxjson.ListUnspentResult
+	var utxos []dcrjson.ListUnspentResult
 
 	jsonParser := json.NewDecoder(unspentFile)
 	if err = jsonParser.Decode(&utxos); err != nil {
@@ -145,7 +145,7 @@ func main() {
 
 	maxTxSize = params.MaxTxSize
 
-	sendToAddress, err := hxutil.DecodeAddress(cfg.SendToAddress)
+	sendToAddress, err := dcrutil.DecodeAddress(cfg.SendToAddress)
 	if err != nil {
 		fmt.Println("Failed to parse tx address: ", err.Error())
 	}
