@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2016 The btcsuite developers
-// Copyright (c) 2015-2016 The Decred developers
+// Copyright (c) 2015-2016 The Hcd developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -392,7 +392,7 @@ func (r FutureListLockUnspentResult) Receive() ([]*wire.OutPoint, error) {
 		if err != nil {
 			return nil, err
 		}
-		ops[i] = wire.NewOutPoint(sha, input.Vout, input.Tree) // Decred TODO
+		ops[i] = wire.NewOutPoint(sha, input.Vout, input.Tree) // Hcd TODO
 	}
 
 	return ops, nil
@@ -1410,7 +1410,7 @@ func (c *Client) GetRawChangeAddress(account string) (hcutil.Address, error) {
 type FutureGetAccountAddressResult chan *response
 
 // Receive waits for the response promised by the future and returns the current
-// Decred address for receiving payments to the specified account.
+// Hcd address for receiving payments to the specified account.
 func (r FutureGetAccountAddressResult) Receive() (hcutil.Address, error) {
 	res, err := receiveFuture(r)
 	if err != nil {
@@ -1437,7 +1437,7 @@ func (c *Client) GetAccountAddressAsync(account string) FutureGetAccountAddressR
 	return c.sendCmd(cmd)
 }
 
-// GetAccountAddress returns the current Decred address for receiving payments
+// GetAccountAddress returns the current Hcd address for receiving payments
 // to the specified account.
 func (c *Client) GetAccountAddress(account string) (hcutil.Address, error) {
 	return c.GetAccountAddressAsync(account).Receive()

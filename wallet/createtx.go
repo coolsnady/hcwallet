@@ -1,5 +1,5 @@
 // Copyright (c) 2013-2016 The btcsuite developers
-// Copyright (c) 2015-2017 The Decred developers
+// Copyright (c) 2015-2017 The Hcd developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -388,7 +388,7 @@ func (w *Wallet) txToOutputs(outputs []*wire.TxOut, account uint32, minconf int3
 // transaction.  The address pool passed must be locked and engaged in an
 // address pool batch call.
 //
-// Decred: This func also sends the transaction, and if successful, inserts it
+// Hcd: This func also sends the transaction, and if successful, inserts it
 // into the database, rather than delegating this work to the caller as
 // btcwallet does.
 func (w *Wallet) txToOutputsInternal(outputs []*wire.TxOut, account uint32, minconf int32,

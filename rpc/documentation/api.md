@@ -84,7 +84,7 @@ rules of Semantic Versioning (SemVer) 2.0.0.
 ## `WalletLoaderService`
 
 The `WalletLoaderService` service provides the caller with functions related to
-the management of the wallet and its connection to the Decred network.  It has
+the management of the wallet and its connection to the Hcd network.  It has
 no dependencies and is always running.
 
 **Methods:**
@@ -228,7 +228,7 @@ ___
 
 The `StartConsensusRpc` method is used to provide clients the ability to
 dynamically start the hcd RPC client.  This RPC client is used for wallet
-syncing and publishing transactions to the Decred network.
+syncing and publishing transactions to the Hcd network.
 
 Since API version 3.0.0, starting the consensus server no longer automatically
 synchronizes the wallet to the consensus server if it was previously loaded.
@@ -238,7 +238,7 @@ synchronizes the wallet to the consensus server if it was previously loaded.
 - `string network_address`: The host/IP and optional port of the RPC server to
   connect to.  IP addresses may be IPv4 or IPv6.  If the port is missing, a
   default port is chosen corresponding to the default hcd RPC port of the
-  active Decred network.
+  active Hcd network.
 
 - `string username`: The RPC username required to authenticate to the RPC
   server.
@@ -955,7 +955,7 @@ wallet.
 
 - `string address`: The payment address string.
 
-- `string public_key`: The public key encoded as a string in the Decred encoding
+- `string public_key`: The public key encoded as a string in the Hcd encoding
   format.
 
 **Expected errors:**
@@ -1326,7 +1326,7 @@ ___
 #### `PublishTransaction`
 
 The `PublishTransaction` method publishes a signed, serialized transaction to
-the Decred network.  If the transaction spends any of the wallet's unspent
+the Hcd network.  If the transaction spends any of the wallet's unspent
 outputs or creates a new output controlled by the wallet, it is saved by the
 wallet and republished later if it or a double spend are not mined.
 
