@@ -117,7 +117,7 @@ func (c *RPCClient) Start() (err error) {
 	var serverAPI semver
 	versions, err := c.Version()
 	if err == nil {
-		versionResult := versions["dcrdjsonrpcapi"]
+		versionResult := versions["hcdjsonrpcapi"]
 		serverAPI = semver{
 			major: versionResult.Major,
 			minor: versionResult.Minor,

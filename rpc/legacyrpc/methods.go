@@ -3107,7 +3107,7 @@ func version(icmd interface{}, w *wallet.Wallet, chainClient *hcrpcclient.Client
 		resp = make(map[string]dcrjson.VersionResult)
 	}
 
-	resp["dcrwalletjsonrpcapi"] = dcrjson.VersionResult{
+	resp["hcwalletjsonrpcapi"] = dcrjson.VersionResult{
 		VersionString: jsonrpcSemverString,
 		Major:         jsonrpcSemverMajor,
 		Minor:         jsonrpcSemverMinor,
