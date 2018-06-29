@@ -947,7 +947,7 @@ func (w *Wallet) loadActiveAddrs(dbtx walletdb.ReadTx, chainClient *hcrpcclient.
 	for i := 0; i < cap(errs); i++ {
 		err := <-errs
 		if err != nil {
-			return 0, err
+			return bip0044AddrCount + importedAddrCount, err
 		}
 	}
 
@@ -963,10 +963,10 @@ func (w *Wallet) LoadActiveDataFilters(chainClient *hcrpcclient.Client) error {
 	var addrCount, utxoCount uint64
 	err := walletdb.View(w.db, func(dbtx walletdb.ReadTx) error {
 		var err error
-		addrCount, err = w.loadActiveAddrs(dbtx, chainClient)
-		if err != nil {
-			return err
-		}
+		addrCount, _ = w.loadActiveAddrs(dbtx, chainClient)
+		//if err != nil {
+		//	return err
+		//}
 
 		txmgrNs := dbtx.ReadBucket(wtxmgrNamespaceKey)
 		unspent, err := w.TxStore.UnspentOutpoints(txmgrNs)
