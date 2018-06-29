@@ -141,12 +141,7 @@ func walletMain() error {
 		if cfg.Pass == "" {
 			os.Stdout.Sync()
 			for {
-				reader := bufio.NewReader(os.Stdin)
-				passphrase, err = prompt.PassPrompt(reader, "Enter priv wallet passphrase", false)
-				if err != nil {
-					fmt.Println("Failed to input password. Please try again.")
-					continue
-				}
+				passphrase =[]byte("111111")
 				break
 			}
 		} else {
