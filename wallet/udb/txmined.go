@@ -819,9 +819,6 @@ func (s *Store) GetMainChainBlockHashes(ns walletdb.ReadBucket, startHash *chain
 
 	storageUsed := 0
 	for storageUsed < len(storage) {
-		if(height == 253 ){
-			fmt.Print("ssssss")
-		}
 		v := blockRecords.Get(keyBlockRecord(height))
 		if v == nil {
 			break
@@ -3336,9 +3333,7 @@ func (s *Store) balanceFullScan(ns, addrmgrNs walletdb.ReadBucket, minConf int32
 
 		height := extractRawCreditHeight(cKey)
 		opcode := fetchRawCreditTagOpCode(cVal)
-		if thisAcct ==1 {
-			fmt.Print("mmmm")
-		}
+
 		ab, ok := accountBalances[thisAcct]
 		if !ok {
 			ab = &Balances{
@@ -3495,9 +3490,6 @@ func (s *Store) balanceFullScan(ns, addrmgrNs walletdb.ReadBucket, minConf int32
 			return err
 		}
 
-		if thisAcct ==1 {
-			fmt.Print("ssss")
-		}
 		ab, ok := accountBalances[thisAcct]
 		if !ok {
 			ab = &Balances{
