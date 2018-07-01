@@ -1201,12 +1201,20 @@ func (s *walletServer) PurchaseTickets(ctx context.Context,
 		return nil, status.Errorf(codes.InvalidArgument,
 			"Negative spend limit given")
 	}
+	
+	accountProperties,err :=s.wallet.AccountProperties(req.Account)
+	if err != nil {
+		return nil, fmt.Errorf("account not exist")
+	}
+
+	if accountProperties.AccountName == udb.BlissAccountName {
+		return nil, fmt.Errorf("unsupported account type for buying tickets")
+	}
 
 	minConf := int32(req.RequiredConfirmations)
 	params := s.wallet.ChainParams()
 
 	var ticketAddr hcutil.Address
-	var err error
 	if req.TicketAddress != "" {
 		ticketAddr, err = decodeAddress(req.TicketAddress, params)
 		if err != nil {
