@@ -1,5 +1,6 @@
 // Copyright (c) 2015-2016 The btcsuite developers
-// Copyright (c) 2016-2017 The Hcd developers
+// Copyright (c) 2016-2017 The Decred developers
+// Copyright (c) 2018-2020 The Hcd developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -9,11 +10,11 @@
 // Full documentation of the API implemented by this package is maintained in a
 // language-agnostic document:
 //
-//   https://github.com/decred/dcrwallet/blob/master/rpc/documentation/api.md
+//   https://github.com/coolsnady/hcwallet/blob/master/rpc/documentation/api.md
 //
 // Any API changes must be performed according to the steps listed here:
 //
-//   https://github.com/decred/dcrwallet/blob/master/rpc/documentation/serverchanges.md
+//   https://github.com/coolsnady/hcwallet/blob/master/rpc/documentation/serverchanges.md
 package rpcserver
 
 import (
@@ -30,7 +31,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-    "github.com/coolsnady/hcd/blockchain/stake"
+	"github.com/coolsnady/hcd/blockchain/stake"
 	"github.com/coolsnady/hcd/chaincfg"
 	"github.com/coolsnady/hcd/chaincfg/chainec"
 	"github.com/coolsnady/hcd/chaincfg/chainhash"
@@ -46,7 +47,7 @@ import (
 	"github.com/coolsnady/hcwallet/internal/zero"
 	"github.com/coolsnady/hcwallet/loader"
 	"github.com/coolsnady/hcwallet/netparams"
-    "github.com/coolsnady/hcwallet/rpc/legacyrpc"
+	"github.com/coolsnady/hcwallet/rpc/legacyrpc"
 	pb "github.com/coolsnady/hcwallet/rpc/walletrpc"
 	"github.com/coolsnady/hcwallet/ticketbuyer"
 	"github.com/coolsnady/hcwallet/wallet"
@@ -409,7 +410,7 @@ func (s *walletServer) NextAccount(ctx context.Context, req *pb.NextAccountReque
 		return nil, translateError(err)
 	}
 
-    acctType := uint8(req.AccountType)
+	acctType := uint8(req.AccountType)
 	account, err := s.wallet.NextAccount(req.AccountName, acctType)
 	if err != nil {
 		return nil, translateError(err)
@@ -435,78 +436,78 @@ func (s *walletServer) NextAddress(ctx context.Context, req *pb.NextAddressReque
 	}
 
 	var (
-		addr hcutil.Address
-        pubKeyFinal string
-		err  error
-        acctType pb.NextAddressResponse_AccountType
+		addr        hcutil.Address
+		pubKeyFinal string
+		err         error
+		acctType    pb.NextAddressResponse_AccountType
 	)
 	switch req.Kind {
 	case pb.NextAddressRequest_BIP0044_EXTERNAL:
-        acctType = pb.NextAddressResponse_BIP0044
+		acctType = pb.NextAddressResponse_BIP0044
 		addr, err = s.wallet.NewExternalAddress(req.Account, callOpts...)
 		if err != nil {
 			return nil, translateError(err)
 		}
 	case pb.NextAddressRequest_BIP0044_INTERNAL:
-        acctType = pb.NextAddressResponse_BIP0044
+		acctType = pb.NextAddressResponse_BIP0044
 		addr, err = s.wallet.NewInternalAddress(req.Account, callOpts...)
 		if err != nil {
 			return nil, translateError(err)
 		}
-    case pb.NextAddressRequest_BLISS:
-        acctType = pb.NextAddressResponse_BLISS
-        addr, err = s.wallet.NewExternalAddress(req.Account, callOpts...)
-        if err != nil {
-            return nil, translateError(err)
-        }
+	case pb.NextAddressRequest_BLISS:
+		acctType = pb.NextAddressResponse_BLISS
+		addr, err = s.wallet.NewExternalAddress(req.Account, callOpts...)
+		if err != nil {
+			return nil, translateError(err)
+		}
 	default:
-        return nil, status.Errorf(codes.InvalidArgument, "kind=%v", req.Kind)
+		return nil, status.Errorf(codes.InvalidArgument, "kind=%v", req.Kind)
 	}
 	if err != nil {
 		return nil, translateError(err)
 	}
 
-    switch req.Kind {
-    case pb.NextAddressRequest_BLISS:
-        var pubKeyBytes []byte
-        ainfo, err := s.wallet.AddressInfo(addr)
-        if err != nil {
-    		if apperrors.IsError(err, apperrors.ErrAddressNotFound) {
-    			return nil, translateError(err)
-    		}
-    		return nil, translateError(err)
-    	}
+	switch req.Kind {
+	case pb.NextAddressRequest_BLISS:
+		var pubKeyBytes []byte
+		ainfo, err := s.wallet.AddressInfo(addr)
+		if err != nil {
+			if apperrors.IsError(err, apperrors.ErrAddressNotFound) {
+				return nil, translateError(err)
+			}
+			return nil, translateError(err)
+		}
 
-        ma := ainfo.(udb.ManagedPubKeyAddress)
-        pubKey := ma.ExportPubKey()
+		ma := ainfo.(udb.ManagedPubKeyAddress)
+		pubKey := ma.ExportPubKey()
 		pubKeyBytes, err = hex.DecodeString(pubKey)
-        if err != nil {
-            return nil, translateError(err)
-        }
+		if err != nil {
+			return nil, translateError(err)
+		}
 
-        pubKeyAddr, err := hcutil.NewAddressBlissPubKey(pubKeyBytes, s.wallet.ChainParams())
-        if err != nil {
-            return nil, translateError(err)
-        }
+		pubKeyAddr, err := hcutil.NewAddressBlissPubKey(pubKeyBytes, s.wallet.ChainParams())
+		if err != nil {
+			return nil, translateError(err)
+		}
 
-        pubKeyFinal = pubKeyAddr.String()
-    default:
-    	pubKey, err := s.wallet.PubKeyForAddress(addr)
-    	if err != nil {
-    		return nil, translateError(err)
-    	}
-    	pubKeyAddr, err := hcutil.NewAddressSecpPubKey(pubKey.Serialize(), s.wallet.ChainParams())
-    	if err != nil {
-    		return nil, translateError(err)
-    	}
+		pubKeyFinal = pubKeyAddr.String()
+	default:
+		pubKey, err := s.wallet.PubKeyForAddress(addr)
+		if err != nil {
+			return nil, translateError(err)
+		}
+		pubKeyAddr, err := hcutil.NewAddressSecpPubKey(pubKey.Serialize(), s.wallet.ChainParams())
+		if err != nil {
+			return nil, translateError(err)
+		}
 
-        pubKeyFinal = pubKeyAddr.String()
-    }
+		pubKeyFinal = pubKeyAddr.String()
+	}
 
 	return &pb.NextAddressResponse{
-		Address:   addr.EncodeAddress(),
-		PublicKey: pubKeyFinal,
-        AccountType: acctType,
+		Address:     addr.EncodeAddress(),
+		PublicKey:   pubKeyFinal,
+		AccountType: acctType,
 	}, nil
 }
 
@@ -987,7 +988,7 @@ func (s *walletServer) GetTransactions(req *pb.GetTransactionsRequest,
 func (s *walletServer) GetTickets(req *pb.GetTicketsRequest,
 	server pb.WalletService_GetTicketsServer) error {
 
-    chainClient, err := s.requireChainClient()
+	chainClient, err := s.requireChainClient()
 	if err != nil {
 		return err
 	}
@@ -1201,8 +1202,8 @@ func (s *walletServer) PurchaseTickets(ctx context.Context,
 		return nil, status.Errorf(codes.InvalidArgument,
 			"Negative spend limit given")
 	}
-	
-	accountProperties,err :=s.wallet.AccountProperties(req.Account)
+
+	accountProperties, err := s.wallet.AccountProperties(req.Account)
 	if err != nil {
 		return nil, fmt.Errorf("account not exist")
 	}
@@ -1395,12 +1396,12 @@ func (s *walletServer) ValidateAddress(ctx context.Context, req *pb.ValidateAddr
 
 	switch ma := addrInfo.(type) {
 	case udb.ManagedPubKeyAddress:
-        var pubKeyStr string
-        var pubKeyBytes []byte
+		var pubKeyStr string
+		var pubKeyBytes []byte
 		var err error
 
 		result.IsCompressed = ma.Compressed()
-        result.PubKey = ma.PubKey().Serialize()
+		result.PubKey = ma.PubKey().Serialize()
 		pubKeyStr = ma.ExportPubKey()
 		pubKeyBytes, err = hex.DecodeString(pubKeyStr)
 		if err != nil {
@@ -1873,7 +1874,7 @@ func (s *loaderServer) OpenWallet(ctx context.Context, req *pb.OpenWalletRequest
 
 	// Use an insecure public passphrase when the request's is empty.
 	pubPassphrase := req.PublicPassphrase
-    privPassphrase := req.PrivatePassphrase
+	privPassphrase := req.PrivatePassphrase
 	if len(pubPassphrase) == 0 {
 		pubPassphrase = []byte(wallet.InsecurePubPassphrase)
 	}

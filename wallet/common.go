@@ -1,4 +1,5 @@
-// Copyright (c) 2016 The Hcd developers
+// Copyright (c) 2016 The Decred developers
+// Copyright (c) 2018-2020 The Hcd developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -26,7 +27,7 @@ type BlockIdentity struct {
 // None returns whether there is no block described by the instance.  When
 // associated with a transaction, this indicates the transaction is unmined.
 func (b *BlockIdentity) None() bool {
-	// BUG: Because dcrwallet uses both 0 and -1 in various places to refer
+	// BUG: Because hcwallet uses both 0 and -1 in various places to refer
 	// to an unmined transaction this must check against both and may not
 	// ever be usable to represent the genesis block.
 	return *b == BlockIdentity{Height: -1} || *b == BlockIdentity{}

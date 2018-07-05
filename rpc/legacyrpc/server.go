@@ -1,5 +1,6 @@
 // Copyright (c) 2013-2015 The btcsuite developers
-// Copyright (c) 2017 The Hcd developers
+// Copyright (c) 2017 The Decred developers
+// Copyright (c) 2018-2020 The Hcd developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -23,7 +24,7 @@ import (
 	"github.com/btcsuite/websocket"
 	"github.com/coolsnady/hcd/chaincfg"
 	"github.com/coolsnady/hcd/dcrjson"
-    hcrpcclient "github.com/coolsnady/hcrpcclient"
+	hcrpcclient "github.com/coolsnady/hcrpcclient"
 	"github.com/coolsnady/hcwallet/chain"
 	"github.com/coolsnady/hcwallet/loader"
 )
@@ -261,7 +262,7 @@ func (s *Server) SetChainServer(chainClient *chain.RPCClient) {
 }
 
 // handlerClosure creates a closure function for handling requests of the given
-// method.  This may be a request that is handled directly by dcrwallet, or
+// method.  This may be a request that is handled directly by hcwallet, or
 // a chain server request that is handled by passing the request down to hcd.
 //
 // NOTE: These handlers do not handle special cases, such as the authenticate
@@ -463,7 +464,7 @@ out:
 				log.Infof("RPC method stop invoked by client %s",
 					remoteAddr(ctx))
 				resp := makeResponse(req.ID,
-					"dcrwallet stopping.", nil)
+					"hcwallet stopping.", nil)
 				mresp, err := json.Marshal(resp)
 				// Expected to never fail.
 				if err != nil {
@@ -615,7 +616,7 @@ func (s *Server) postClientRPC(w http.ResponseWriter, r *http.Request) {
 	case "stop":
 		log.Infof("RPC method stop invoked by client %s", r.RemoteAddr)
 		stop = true
-		res = "dcrwallet stopping"
+		res = "hcwallet stopping"
 	default:
 		res, jsonErr = s.handlerClosure(ctx, &req)()
 	}

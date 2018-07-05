@@ -159,18 +159,18 @@ RPC username and password.
 
 PowerShell (Installed from MSI):
 ```
-PS> cp "$env:ProgramFiles\coolsnady\Hxd\sample-hcd.conf" $env:LOCALAPPDATA\Hxd\hcd.conf
-PS> cp "$env:ProgramFiles\coolsnady\Hxwallet\sample-hcwallet.conf" $env:LOCALAPPDATA\Hxwallet\hcwallet.conf
-PS> $editor $env:LOCALAPPDATA\Hxd\hcd.conf
-PS> $editor $env:LOCALAPPDATA\Hxwallet\hcwallet.conf
+PS> cp "$env:ProgramFiles\coolsnady\Hcd\sample-hcd.conf" $env:LOCALAPPDATA\Hcd\hcd.conf
+PS> cp "$env:ProgramFiles\coolsnady\hcwallet\sample-hcwallet.conf" $env:LOCALAPPDATA\hcwallet\hcwallet.conf
+PS> $editor $env:LOCALAPPDATA\Hcd\hcd.conf
+PS> $editor $env:LOCALAPPDATA\hcwallet\hcwallet.conf
 ```
 
 PowerShell (Installed from source):
 ```
-PS> cp $env:GOPATH\src\github.com\coolsnady\hcd\sample-hcd.conf $env:LOCALAPPDATA\Hxd\hcd.conf
-PS> cp $env:GOPATH\src\github.com\coolsnady\hcwallet\sample-hcwallet.conf $env:LOCALAPPDATA\Hxwallet\hcwallet.conf
-PS> $editor $env:LOCALAPPDATA\Hxd\hcd.conf
-PS> $editor $env:LOCALAPPDATA\Hxwallet\hcwallet.conf
+PS> cp $env:GOPATH\src\github.com\coolsnady\hcd\sample-hcd.conf $env:LOCALAPPDATA\Hcd\hcd.conf
+PS> cp $env:GOPATH\src\github.com\coolsnady\hcwallet\sample-hcwallet.conf $env:LOCALAPPDATA\Hcwallet\hcwallet.conf
+PS> $editor $env:LOCALAPPDATA\Hcd\hcd.conf
+PS> $editor $env:LOCALAPPDATA\Hcwallet\hcwallet.conf
 ```
 
 Linux/BSD/POSIX (Installed from source):

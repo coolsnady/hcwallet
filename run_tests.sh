@@ -21,7 +21,7 @@ set -ex
 
 #Default GOVERSION
 GOVERSION=${1:-1.9}
-REPO=dcrwallet
+REPO=hcwallet
 
 TESTCMD="test -z \"\$(gometalinter -j 4 --disable-all \
   --enable=gofmt \
@@ -47,12 +47,12 @@ fi
 
 DOCKER_IMAGE_TAG=decred-golang-builder-$GOVERSION
 
-docker pull decred/$DOCKER_IMAGE_TAG
+docker pull coolsnady/$DOCKER_IMAGE_TAG
 
-docker run --rm -it -v $(pwd):/src decred/$DOCKER_IMAGE_TAG /bin/bash -c "\
+docker run --rm -it -v $(pwd):/src coolsnady/$DOCKER_IMAGE_TAG /bin/bash -c "\
   rsync -ra --filter=':- .gitignore'  \
-  /src/ /go/src/github.com/decred/$REPO/ && \
-  cd github.com/decred/$REPO/ && \
+  /src/ /go/src/github.com/coolsnady/$REPO/ && \
+  cd github.com/coolsnady/$REPO/ && \
   glide install && \
   go install \$(glide novendor) && \
   $TESTCMD

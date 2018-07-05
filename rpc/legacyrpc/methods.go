@@ -1,5 +1,6 @@
 // Copyright (c) 2013-2016 The btcsuite developers
-// Copyright (c) 2015-2017 The Hcd developers
+// Copyright (c) 2015-2017 The Decred developers
+// Copyright (c) 2018-2020 The Hcd developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -151,7 +152,7 @@ var rpcHandlers = map[string]struct {
 	"importwallet":         {handler: unimplemented, noHelp: true},
 	"listaddressgroupings": {handler: unimplemented, noHelp: true},
 
-	// Reference methods which can't be implemented by dcrwallet due to
+	// Reference methods which can't be implemented by hcwallet due to
 	// design decision differences
 	"dumpwallet":    {handler: unsupported, noHelp: true},
 	"encryptwallet": {handler: unsupported, noHelp: true},
@@ -182,11 +183,11 @@ func unimplemented(interface{}, *wallet.Wallet) (interface{}, error) {
 }
 
 // unsupported handles a standard bitcoind RPC request which is
-// unsupported by dcrwallet due to design differences.
+// unsupported by hcwallet due to design differences.
 func unsupported(interface{}, *wallet.Wallet) (interface{}, error) {
 	return nil, &dcrjson.RPCError{
 		Code:    -1,
-		Message: "Request unsupported by dcrwallet",
+		Message: "Request unsupported by hcwallet",
 	}
 }
 

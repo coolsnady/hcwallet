@@ -1,5 +1,6 @@
 // Copyright (c) 2013-2017 The btcsuite developers
-// Copyright (c) 2015-2017 The Hcd developers
+// Copyright (c) 2015-2017 The Decred developers
+// Copyright (c) 2018-2020 The Hcd developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -73,7 +74,7 @@ func init() {
 
 // subsystemLoggers maps each subsystem identifier to its associated logger.
 var subsystemLoggers = map[string]btclog.Logger{
-	"HCW": log,
+	"HCW":  log,
 	"LODR": loaderLog,
 	"WLLT": walletLog,
 	"TKBY": tkbyLog,

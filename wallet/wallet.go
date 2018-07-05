@@ -1,5 +1,6 @@
 // Copyright (c) 2013-2016 The btcsuite developers
-// Copyright (c) 2015-2017 The Hcd developers
+// Copyright (c) 2015-2017 The Decred developers
+// Copyright (c) 2018-2020 The Hcd developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -1073,7 +1074,7 @@ func (w *Wallet) FetchHeaders(chainClient *hcrpcclient.Client) (count int, resca
 	// reverse order, stopping at the first block that is found and that exists
 	// on the actual main chain.
 	//
-	// See https://github.com/decred/hcd/issues/427 for details.  This hack
+	// See https://github.com/coolsnady/hcd/issues for details.  This hack
 	// should be dumped once fixed.
 	var (
 		commonAncestor       chainhash.Hash

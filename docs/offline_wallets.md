@@ -35,7 +35,7 @@ granted that hcd and hcwallet are installed and vendored dependencies
 are up to date with glide:
 
 ```
-cd $GOPATH/src/github.com/hcwallet/cmd/movefunds
+cd $GOPATH/src/github.com/coolsnady/hcwallet/cmd/movefunds
 go install
 ```
 
@@ -62,10 +62,10 @@ the following procedure can be done:
 2. Open unspent.json and remove any outputs you do not want to spend.
 
 3. Open a terminal and change directory to where unspent.json is. Then, copy
-    config.json from $GOPATH/src/github.com/hcwallet/cmd/movefunds to
+    config.json from $GOPATH/src/github.com/coolsnady/hcwallet/cmd/movefunds to
 	this directory.
 	```
-	cp $GOPATH/src/github.com/hcwallet/cmd/movefunds/config.json config.json
+	cp $GOPATH/src/github.com/coolsnady/hcwallet/cmd/movefunds/config.json config.json
 	```
     Edit config.json according to the network you're sending the funds on.
     Fill in a recipient address there.

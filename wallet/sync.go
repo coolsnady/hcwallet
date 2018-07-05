@@ -1,4 +1,5 @@
-// Copyright (c) 2015-2017 The Hcd developers
+// Copyright (c) 2015-2017 The Decred developers
+// Copyright (c) 2018-2020 The Hcd developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -10,9 +11,9 @@ import (
 	"sync"
 
 	"github.com/coolsnady/bitset"
+	hcrpcclient "github.com/coolsnady/hcrpcclient"
 	"github.com/coolsnady/hcutil"
 	"github.com/coolsnady/hcutil/hdkeychain"
-    hcrpcclient "github.com/coolsnady/hcrpcclient"
 	"github.com/coolsnady/hcwallet/wallet/udb"
 	"github.com/coolsnady/hcwallet/walletdb"
 )

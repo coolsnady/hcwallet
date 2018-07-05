@@ -185,7 +185,7 @@ func main() {
 
 	// The command to sign the transaction.
 	var buf bytes.Buffer
-	buf.WriteString("dcrctl ")
+	buf.WriteString("hcctl ")
 	buf.WriteString(cfg.DcrctlArgs)
 	buf.WriteString(" signrawtransaction ")
 	buf.WriteString(hex.EncodeToString(txB))

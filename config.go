@@ -1,5 +1,6 @@
 // Copyright (c) 2013-2016 The btcsuite developers
-// Copyright (c) 2015-2017 The Hcd developers
+// Copyright (c) 2015-2017 The Decred developers
+// Copyright (c) 2018-2020 The Hcd developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -50,20 +51,20 @@ const (
 	// ticket buyer options
 	defaultMaxFee                    hcutil.Amount = 1e6
 	defaultMinFee                    hcutil.Amount = 1e5
-	defaultMaxPriceScale                            = 0.0
-	defaultAvgVWAPPriceDelta                        = 2880
-	defaultMaxPerBlock                              = 1
-	defaultBlocksToAvg                              = 11
-	defaultFeeTargetScaling                         = 1.0
-	defaultMaxInMempool                             = 40
-	defaultExpiryDelta                              = 16
-	defaultFeeSource                                = ticketbuyer.TicketFeeMedian
-	defaultAvgPriceMode                             = ticketbuyer.PriceTargetVWAP
-	defaultMaxPriceAbsolute                         = 0
-	defaultMaxPriceRelative                         = 1.25
-	defaultPriceTarget                              = 0
-	defaultBalanceToMaintainAbsolute                = 0
-	defaultBalanceToMaintainRelative                = 0.3
+	defaultMaxPriceScale                           = 0.0
+	defaultAvgVWAPPriceDelta                       = 2880
+	defaultMaxPerBlock                             = 1
+	defaultBlocksToAvg                             = 11
+	defaultFeeTargetScaling                        = 1.0
+	defaultMaxInMempool                            = 40
+	defaultExpiryDelta                             = 16
+	defaultFeeSource                               = ticketbuyer.TicketFeeMedian
+	defaultAvgPriceMode                            = ticketbuyer.PriceTargetVWAP
+	defaultMaxPriceAbsolute                        = 0
+	defaultMaxPriceRelative                        = 1.25
+	defaultPriceTarget                             = 0
+	defaultBalanceToMaintainAbsolute               = 0
+	defaultBalanceToMaintainRelative               = 0.3
 
 	walletDbName = "wallet.db"
 )
@@ -315,7 +316,7 @@ func parseAndSetDebugLevels(debugLevel string) error {
 //      3) Load configuration file overwriting defaults with any specified options
 //      4) Parse CLI options and overwrite/add any specified options
 //
-// The above results in dcrwallet functioning properly without any config
+// The above results in hcwallet functioning properly without any config
 // settings while still allowing the user to override settings with config files
 // and command line options.  Command line options always take precedence.
 // The bool returned indicates whether or not the wallet was recreated from a

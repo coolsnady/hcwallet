@@ -15,7 +15,7 @@ each.  In short summary, to call RPC server methods, a client must:
 
 The only exception to these steps is if the client is being written in Go.  In
 that case, the first step may be omitted by importing the bindings from
-dcrwallet itself.
+hcwallet itself.
 
 The rest of this document provides short examples of how to quickly get started
 by implementing a basic client that fetches the balance of the default account
@@ -52,7 +52,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	pb "github.com/decred/dcrwallet/rpc/walletrpc"
+	pb "github.com/coolsnady/hcwallet/rpc/walletrpc"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -60,7 +60,7 @@ import (
 	"github.com/coolsnady/hcutil"
 )
 
-var certificateFile = filepath.Join(hcutil.AppDataDir("dcrwallet", false), "rpc.cert")
+var certificateFile = filepath.Join(hcutil.AppDataDir("hcwallet", false), "rpc.cert")
 
 func main() {
 	creds, err := credentials.NewClientTLSFromFile(certificateFile, "localhost")
@@ -103,9 +103,9 @@ example source code) with a source gRPC install in `/usr/local`.
 First, generate the C++ language bindings by compiling the `.proto`:
 
 ```bash
-$ protoc -I/path/to/dcrwallet/rpc --cpp_out=. --grpc_out=. \
+$ protoc -I/path/to/hcwallet/rpc --cpp_out=. --grpc_out=. \
   --plugin=protoc-gen-grpc=$(which grpc_cpp_plugin) \
-  /path/to/dcrwallet/rpc/api.proto
+  /path/to/hcwallet/rpc/api.proto
 ```
 
 Once the `.proto` file has been compiled, the example client can be completed.
@@ -145,7 +145,7 @@ auto read_file(std::string const& file_path) -> std::string {
 auto main() -> int {
     // Before the gRPC native library (gRPC Core) is lazily loaded and
     // initialized, an environment variable must be set so BoringSSL is
-    // configured to use ECDSA TLS certificates (required by dcrwallet).
+    // configured to use ECDSA TLS certificates (required by hcwallet).
     setenv("GRPC_SSL_CIPHER_SUITES", "HIGH+ECDSA", 1);
 
     // Note: This path is operating system-dependent.  This can be created
@@ -156,7 +156,7 @@ auto main() -> int {
         if (pw == nullptr || pw->pw_dir == nullptr) {
             throw NoHomeDirectoryException{};
         }
-        return pw->pw_dir + "/.dcrwallet/rpc.cert"s;
+        return pw->pw_dir + "/.hcwallet/rpc.cert"s;
     }();
 
     grpc::SslCredentialsOptions cred_options{
@@ -216,9 +216,9 @@ generated.  The following command generates the files `Api.cs` and `ApiGrpc.cs`
 in the `Example` project directory using the `Walletrpc` namespace:
 
 ```PowerShell
-PS> & protoc.exe -I \Path\To\dcrwallet\rpc --csharp_out=Example --grpc_out=Example `
+PS> & protoc.exe -I \Path\To\hcwallet\rpc --csharp_out=Example --grpc_out=Example `
     --plugin=protoc-gen-grpc=\Path\To\grpc_csharp_plugin.exe `
-    \Path\To\dcrwallet\rpc\api.proto
+    \Path\To\hcwallet\rpc\api.proto
 ```
 
 Once references have been added to the project for the `Google.Protobuf` and
@@ -245,10 +245,10 @@ namespace Example
         {
             // Before the gRPC native library (gRPC Core) is lazily loaded and initialized,
             // an environment variable must be set so BoringSSL is configured to use ECDSA TLS
-            // certificates (required by dcrwallet).
+            // certificates (required by hcwallet).
             Environment.SetEnvironmentVariable("GRPC_SSL_CIPHER_SUITES", "HIGH+ECDSA");
 
-            var walletAppData = Portability.LocalAppData(Environment.OSVersion.Platform, "Dcrwallet");
+            var walletAppData = Portability.LocalAppData(Environment.OSVersion.Platform, "hcwallet");
             var walletTlsCertFile = Path.Combine(walletAppData, "rpc.cert");
             var cert = await FileUtils.ReadFileAsync(walletTlsCertFile);
             var channel = new Channel("localhost:19111", new SslCredentials(cert));
@@ -338,12 +338,12 @@ the wallet's API from the `.proto`.  Instead, a call to `grpc.load`
 with the `.proto` file path dynamically loads the Protobuf descriptor
 and generates bindings for each service.  Either copy the `.proto` to
 the client project directory, or reference the file from the
-`dcrwallet` project directory.
+`hcwallet` project directory.
 
 ```JavaScript
 // Before the gRPC native library (gRPC Core) is lazily loaded and
 // initialized, an environment variable must be set so BoringSSL is
-// configured to use ECDSA TLS certificates (required by dcrwallet).
+// configured to use ECDSA TLS certificates (required by hcwallet).
 process.env['GRPC_SSL_CIPHER_SUITES'] = 'HIGH+ECDSA';
 
 var fs = require('fs');
@@ -355,12 +355,12 @@ var walletrpc = protoDescriptor.walletrpc;
 
 var certPath = '';
 if (os.platform() == 'win32') {
-  certPath = path.join(process.env.LOCALAPPDATA, 'Dcrwallet', 'rpc.cert');
+  certPath = path.join(process.env.LOCALAPPDATA, 'hcwallet', 'rpc.cert');
 } else if (os.platform() == 'darwin') {
   certPath = path.join(process.env.HOME, 'Library', 'Application Support',
-    'Dcrwallet', 'rpc.cert');
+    'hcwallet', 'rpc.cert');
 } else {
-  certPath = path.join(process.env.HOME, '.dcrwallet', 'rpc.cert');
+  certPath = path.join(process.env.HOME, '.hcwallet', 'rpc.cert');
 }
 
 var cert = fs.readFileSync(certPath);
@@ -394,9 +394,9 @@ pip install grpcio
 Generate Python stubs from the `.proto`:
 
 ```bash
-$ protoc -I /path/to/decred/dcrwallet/rpc --python_out=. --grpc_out=. \
+$ protoc -I /path/to/coolsnady/hcwallet/rpc --python_out=. --grpc_out=. \
   --plugin=protoc-gen-grpc=$(which grpc_python_plugin) \
-  /path/to/dcrwallet/rpc/api.proto
+  /path/to/hcwallet/rpc/api.proto
 ```
 
 Implement the client:
@@ -413,16 +413,16 @@ timeout = 1 # seconds
 def main():
     # Before the gRPC native library (gRPC Core) is lazily loaded and
     # initialized, an environment variable must be set so BoringSSL is
-    # configured to use ECDSA TLS certificates (required by dcrwallet).
+    # configured to use ECDSA TLS certificates (required by hcwallet).
     os.environ['GRPC_SSL_CIPHER_SUITES'] = 'HIGH+ECDSA'
 
     if platform.system() == 'Windows':
-        cert_file_path = os.path.join(os.environ['LOCALAPPDATA'], "Dcrwallet", "rpc.cert")
+        cert_file_path = os.path.join(os.environ['LOCALAPPDATA'], "hcwallet", "rpc.cert")
     elif platform.system() == 'Darwin':
         cert_file_path = os.path.join(os.environ['HOME'], 'Library', 'Application Support',
-                                      'Dcrwallet', 'rpc.cert')
+                                      'hcwallet', 'rpc.cert')
     else:
-        cert_file_path = os.path.join(os.environ['HOME'], '.dcrwallet', 'rpc.cert')
+        cert_file_path = os.path.join(os.environ['HOME'], '.hcwallet', 'rpc.cert')
 
     with open(cert_file_path, 'r') as f:
         cert = f.read()

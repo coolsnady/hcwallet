@@ -1,4 +1,5 @@
-// Copyright (c) 2016 The Hcd developers
+// Copyright (c) 2016 The Decred developers
+// Copyright (c) 2018-2020 The Hcd developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -56,7 +57,7 @@ var (
 )
 
 // Harness fully encapsulates an active hcd process, along with an embedded
-// dcrwallet to provide a unified platform for creating RPC-driven integration
+// hcwallet to provide a unified platform for creating RPC-driven integration
 // tests involving hcd. The active hcd node will typically be run in simnet
 // mode to allow for easy generation of test blockchains. Additionally, a
 // special method is provided which allows one to easily generate coinbase
@@ -197,7 +198,7 @@ func (h *Harness) SetUp(createTestChain bool, numMatureOutputs uint32) error {
 	}
 	fmt.Println("Node RPC client connected.")
 
-	// Start dcrwallet. This spawns a new process which will be managed
+	// Start hcwallet. This spawns a new process which will be managed
 	if err = h.wallet.Start(); err != nil {
 		return err
 	}
