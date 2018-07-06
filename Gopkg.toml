@@ -30,27 +30,27 @@
   version = "1.3.1"
 
 [[constraint]]
-  branch = "master"
+  branch = "v0.1.0"
   name = "github.com/btcsuite/btclog"
 
 [[constraint]]
-  branch = "master"
+  branch = "v0.1.0"
   name = "github.com/btcsuite/websocket"
 
 [[constraint]]
-  branch = "master"
+  branch = "v0.1.0"
   name = "github.com/coolsnady/bitset"
 
 [[constraint]]
-  branch = "master"
+  branch = "v0.1.0"
   name = "github.com/coolsnady/hcd"
 
 [[constraint]]
-  branch = "master"
+  branch = "v0.1.0"
   name = "github.com/coolsnady/hcrpcclient"
 
 [[constraint]]
-  branch = "master"
+  branch = "v0.1.0"
   name = "github.com/coolsnady/hcutil"
 
 [[constraint]]
@@ -62,7 +62,7 @@
   version = "1.4.0"
 
 [[constraint]]
-  branch = "master"
+  branch = "v0.1.0"
   name = "github.com/jrick/logrotate"
 
 [[constraint]]
@@ -70,15 +70,15 @@
   version = "1.2.2"
 
 [[constraint]]
-  branch = "master"
+  branch = "v0.1.0"
   name = "golang.org/x/crypto"
 
 [[constraint]]
-  branch = "master"
+  branch = "v0.1.0"
   name = "golang.org/x/net"
 
 [[constraint]]
-  branch = "master"
+  branch = "v0.1.0"
   name = "golang.org/x/sync"
 
 [[constraint]]
