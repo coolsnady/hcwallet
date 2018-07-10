@@ -12,17 +12,17 @@ import (
 	"fmt"
 	"time"
 
-
 	"github.com/coolsnady/hcd/blockchain"
 	"github.com/coolsnady/hcd/blockchain/stake"
 	"github.com/coolsnady/hcd/chaincfg"
 	"github.com/coolsnady/hcd/chaincfg/chainec"
 	"github.com/coolsnady/hcd/chaincfg/chainhash"
+	bs "github.com/coolsnady/hcd/crypto/bliss"
 	"github.com/coolsnady/hcd/dcrjson"
 	"github.com/coolsnady/hcd/mempool"
 	"github.com/coolsnady/hcd/txscript"
 	"github.com/coolsnady/hcd/wire"
-    hcrpcclient "github.com/coolsnady/hcrpcclient"
+	hcrpcclient "github.com/coolsnady/hcrpcclient"
 	"github.com/coolsnady/hcutil"
 	"github.com/coolsnady/hcwallet/apperrors"
 	"github.com/coolsnady/hcwallet/wallet/internal/txsizes"
@@ -66,6 +66,14 @@ const (
 	// of value, two bytes of version, one byte of varint, and the pkScript
 	// size.
 	txOutEstimate = 8 + 2 + 1 + pkScriptEstimate
+
+	// singleInputBlissTicketSize is the typical size of a normal P2PKH ticket
+	// in bytes when the ticket has one input, rounded up.
+	singleInputBlissTicketSize = 1900
+
+	// doubleInputBlissTicketSize is the typical size of a normal P2PKH ticket
+	// in bytes when the ticket has two inputs, rounded up.
+	doubleInputBlissTicketSize = 1900 * 2
 
 	// singleInputTicketSize is the typical size of a normal P2PKH ticket
 	// in bytes when the ticket has one input, rounded up.
@@ -456,12 +464,10 @@ func (w *Wallet) txToOutputsInternal(outputs []*wire.TxOut, account uint32, minc
 		log.Warnf("Spend from imported account produced change: moving"+
 			" %v from imported account into default account.", changeAmount)
 	}
-
 	rec, err := udb.NewTxRecordFromMsgTx(atx.Tx, time.Now())
 	if err != nil {
 		return nil, err
 	}
-
 	// Use a single DB update to store and publish the transaction.  If the
 	// transaction is rejected, the update is rolled back.
 	err = walletdb.Update(w.db, func(dbtx walletdb.ReadWriteTx) error {
@@ -750,7 +756,7 @@ func (w *Wallet) compressWalletInternal(dbtx walletdb.ReadWriteTx, maxNumIns int
 
 	// Check if output address is default, and generate a new adress if needed
 	if changeAddr == nil {
-		changeAddr, err = w.newChangeAddress(w.persistReturnedChild(dbtx), account)
+		changeAddr, err = w.newChangeAddress(w.persistReturnedChild(dbtx), account, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -835,6 +841,7 @@ func makeTicket(params *chaincfg.Params, inputPool *extendedOutPoint,
 
 	// Create a new script which pays to the provided address with an
 	// SStx tagged output.
+
 	pkScript, err := txscript.PayToSStx(addrVote)
 	if err != nil {
 		return nil, err
@@ -853,7 +860,6 @@ func makeTicket(params *chaincfg.Params, inputPool *extendedOutPoint,
 		if err != nil {
 			return nil, err
 		}
-
 	} else {
 		_, amountsCommitted, err = stake.SStxNullOutputAmounts(
 			[]int64{inputPool.amt, input.amt}, []int64{0, 0}, ticketCost)
@@ -926,6 +932,35 @@ func makeTicket(params *chaincfg.Params, inputPool *extendedOutPoint,
 	return mtx, nil
 }
 
+func (w *Wallet) getTicketFeeAndNeededTicketPrice(account uint32, poolAddressExist bool, ticketPrice, ticketFeeIncrement hcutil.Amount) (hcutil.Amount, hcutil.Amount, error) {
+	var ticketFee, neededPerTicket hcutil.Amount
+
+	props, err := w.AccountProperties(account)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	//bliss ticket has a longer byte length
+	var singleSize, doubleSize hcutil.Amount
+	if props.AccountType == udb.AcctypeBliss {
+		singleSize = singleInputBlissTicketSize
+		doubleSize = doubleInputBlissTicketSize
+	} else {
+		singleSize = singleInputTicketSize
+		doubleSize = doubleInputTicketSize
+	}
+
+	if !poolAddressExist {
+		ticketFee = (ticketFeeIncrement * singleSize) / 1000
+		neededPerTicket = ticketFee + ticketPrice
+	} else {
+		ticketFee = (ticketFeeIncrement * doubleSize) / 1000
+		neededPerTicket = ticketFee + ticketPrice
+	}
+
+	return ticketFee, neededPerTicket, nil
+}
+
 // purchaseTickets indicates to the wallet that a ticket should be purchased
 // using all currently available funds.  The ticket address parameter in the
 // request can be nil in which case the ticket address associated with the
@@ -968,7 +1003,7 @@ func (w *Wallet) purchaseTickets(req purchaseTicketRequest) ([]*chainhash.Hash, 
 	if w.addressReuse {
 		xpub := w.addressBuffers[udb.DefaultAccountNum].albExternal.branchXpub
 		addr, err := deriveChildAddress(xpub, 0, w.chainParams)
-		addrFunc = func(persistReturnedChildFunc, uint32) (hcutil.Address, error) {
+		addrFunc = func(persistReturnedChildFunc, uint32, walletdb.ReadWriteTx) (hcutil.Address, error) {
 			return addr, err
 		}
 	}
@@ -1019,20 +1054,12 @@ func (w *Wallet) purchaseTickets(req purchaseTicketRequest) ([]*chainhash.Hash, 
 	// ticket required amounts depending on whether or not a
 	// pool output is needed. If the ticket fee increment is
 	// unset in the request, use the global ticket fee increment.
-	var neededPerTicket, ticketFee hcutil.Amount
 	ticketFeeIncrement := req.ticketFee
 	if ticketFeeIncrement == 0 {
 		ticketFeeIncrement = w.TicketFeeIncrement()
 	}
-	if poolAddress == nil {
-		ticketFee = (ticketFeeIncrement * singleInputTicketSize) /
-			1000
-		neededPerTicket = ticketFee + ticketPrice
-	} else {
-		ticketFee = (ticketFeeIncrement * doubleInputTicketSize) /
-			1000
-		neededPerTicket = ticketFee + ticketPrice
-	}
+
+	ticketFee, neededPerTicket, err := w.getTicketFeeAndNeededTicketPrice(account, poolAddress != nil,ticketPrice, ticketFeeIncrement)
 
 	// If we need to calculate the amount for a pool fee percentage,
 	// do so now.
@@ -1092,8 +1119,7 @@ func (w *Wallet) purchaseTickets(req purchaseTicketRequest) ([]*chainhash.Hash, 
 				return nil, fmt.Errorf("cannot create txout script: %s", err)
 			}
 
-			splitOuts = append(splitOuts,
-				wire.NewTxOut(int64(neededPerTicket), pkScript))
+			splitOuts = append(splitOuts, wire.NewTxOut(int64(neededPerTicket), pkScript))
 		} else {
 			// Stake pool used.
 			userAmt := neededPerTicket - poolFeeAmt
@@ -1115,7 +1141,6 @@ func (w *Wallet) purchaseTickets(req purchaseTicketRequest) ([]*chainhash.Hash, 
 
 			splitOuts = append(splitOuts, wire.NewTxOut(int64(userAmt), pkScript))
 		}
-
 	}
 
 	txFeeIncrement := req.txFee
@@ -1198,14 +1223,13 @@ func (w *Wallet) purchaseTickets(req purchaseTicketRequest) ([]*chainhash.Hash, 
 			if addrVote == nil {
 				addrVote = w.ticketAddress
 				if addrVote == nil {
-					addrVote, err = addrFunc(w.persistReturnedChild(dbtx), req.account)
+					addrVote, err = addrFunc(w.persistReturnedChild(dbtx), req.account, dbtx)
 					if err != nil {
 						return err
 					}
 				}
 			}
-
-			addrSubsidy, err = addrFunc(w.persistReturnedChild(dbtx), req.account)
+			addrSubsidy, err = addrFunc(w.persistReturnedChild(dbtx), req.account, dbtx)
 			return err
 		})
 		if err != nil {
@@ -1213,8 +1237,7 @@ func (w *Wallet) purchaseTickets(req purchaseTicketRequest) ([]*chainhash.Hash, 
 		}
 
 		// Generate the ticket msgTx and sign it.
-		ticket, err := makeTicket(w.chainParams, eopPool, eop, addrVote,
-			addrSubsidy, int64(ticketPrice), poolAddress)
+		ticket, err := makeTicket(w.chainParams, eopPool, eop, addrVote, addrSubsidy, int64(ticketPrice), poolAddress)
 		if err != nil {
 			return ticketHashes, err
 		}
@@ -1333,7 +1356,6 @@ func (w *Wallet) txToSStxInternal(dbtx walletdb.ReadWriteTx, pair map[string]hcu
 		if err != nil {
 			return nil, fmt.Errorf("cannot decode address: %s", err)
 		}
-
 		// Add output to spend amt to addr.
 		pkScript, err := txscript.PayToSStx(addr)
 		if err != nil {
@@ -1380,7 +1402,7 @@ func (w *Wallet) txToSStxInternal(dbtx walletdb.ReadWriteTx, pair map[string]hcu
 		if payouts[i].Addr == "" {
 			var err error
 			addr, err = w.newChangeAddress(w.persistReturnedChild(dbtx),
-				udb.DefaultAccountNum)
+				udb.DefaultAccountNum, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -1422,7 +1444,7 @@ func (w *Wallet) txToSStxInternal(dbtx walletdb.ReadWriteTx, pair map[string]hcu
 		if payouts[i].ChangeAddr == "" {
 			var err error
 			changeAddr, err = w.newChangeAddress(w.persistReturnedChild(dbtx),
-				udb.DefaultAccountNum)
+				udb.DefaultAccountNum, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -1694,10 +1716,19 @@ func signMsgTx(msgtx *wire.MsgTx, prevOutputs []udb.Credit,
 		if err != nil {
 			return err
 		}
-		defer done()
 
-		sigscript, err := txscript.SignatureScript(msgtx, i, output.PkScript,
-			txscript.SigHashAll, privKey, true)
+		chainecType := addrs[0].DSA(addrs[0].Net())
+		signType := chainec.ECTypeSecp256k1
+		if chainecType == chainec.ECTypeSecp256k1 {
+			signType = chainec.ECTypeSecp256k1
+		} else if chainecType == bs.BSTypeBliss {
+			signType = bs.BSTypeBliss
+		} else {
+			return fmt.Errorf("not support sign type")
+		}
+
+		defer done()
+		sigscript, err := txscript.SignatureScriptAlt(msgtx, i, output.PkScript, txscript.SigHashAll, privKey, true, signType)
 		if err != nil {
 			return fmt.Errorf("cannot create sigscript: %s", err)
 		}
@@ -1762,6 +1793,7 @@ func (w *Wallet) signVoteOrRevocation(addrmgrNs walletdb.ReadBucket, ticketPurch
 	signedScript, err := txscript.SignTxOutput(w.chainParams, tx, inputToSign,
 		redeemTicketScript, txscript.SigHashAll, getKey, getScript,
 		tx.TxIn[inputToSign].SignatureScript, chainec.ECTypeSecp256k1)
+
 	if err != nil {
 		return err
 	}
@@ -1819,8 +1851,7 @@ func createUnsignedVote(ticketHash *chainhash.Hash, ticketPurchase *wire.MsgTx,
 	vote := wire.NewMsgTx()
 
 	// Add stakebase input to the vote.
-	stakebaseOutPoint := wire.NewOutPoint(&chainhash.Hash{}, ^uint32(0),
-		wire.TxTreeRegular)
+	stakebaseOutPoint := wire.NewOutPoint(&chainhash.Hash{}, ^uint32(0), wire.TxTreeRegular)
 	stakebaseInput := wire.NewTxIn(stakebaseOutPoint, nil)
 	stakebaseInput.ValueIn = subsidy
 	vote.AddTxIn(stakebaseInput)
@@ -1849,8 +1880,13 @@ func createUnsignedVote(ticketHash *chainhash.Hash, ticketPurchase *wire.MsgTx,
 		if ticketPayKinds[i] { // P2SH
 			scriptFn = txscript.PayToSSGenSHDirect
 		}
+		pkhChangePkScript := ticketPurchase.TxOut[0+2*i].PkScript
+		alType, err := txscript.ExtractPkScriptAltSigType(pkhChangePkScript[1:])
+		if err != nil {
+			alType = 0
+		}
 		// Error is checking for a nil hash160, just ignore it.
-		script, _ := scriptFn(hash160)
+		script, _ := scriptFn(hash160, alType)
 		vote.AddTxOut(wire.NewTxOut(voteRewardValues[i], script))
 	}
 
@@ -1887,8 +1923,13 @@ func createUnsignedRevocation(ticketHash *chainhash.Hash, ticketPurchase *wire.M
 		if ticketPayKinds[i] { // P2SH
 			scriptFn = txscript.PayToSSRtxSHDirect
 		}
+		pkhChangePkScript := ticketPurchase.TxOut[0+2*i].PkScript
+		alType, err := txscript.ExtractPkScriptAltSigType(pkhChangePkScript[1:])
+		if err != nil {
+			alType = 0
+		}
 		// Error is checking for a nil hash160, just ignore it.
-		script, _ := scriptFn(hash160)
+		script, _ := scriptFn(hash160, alType)
 		revocation.AddTxOut(wire.NewTxOut(revocationValues[i], script))
 	}
 

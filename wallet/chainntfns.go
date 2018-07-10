@@ -281,8 +281,9 @@ func (w *Wallet) onBlockConnected(serializedBlockHeader []byte, transactions [][
 	// Prune all expired transactions and all stake tickets that no longer
 	// meet the minimum stake difficulty.
 	err = walletdb.Update(w.db, func(dbtx walletdb.ReadWriteTx) error {
-		txmgrNs := dbtx.ReadWriteBucket(wtxmgrNamespaceKey)
-		return w.TxStore.PruneUnconfirmed(txmgrNs, height, blockHeader.SBits)
+	//	txmgrNs := dbtx.ReadWriteBucket(wtxmgrNamespaceKey)
+	//	return w.TxStore.PruneUnconfirmed(txmgrNs, height, blockHeader.SBits)
+		return w.TxStore.PruneUnmined(dbtx, blockHeader.SBits)
 	})
 	if err != nil {
 		log.Errorf("Failed to prune unconfirmed transactions when "+
@@ -945,6 +946,10 @@ func (w *Wallet) handleWinningTickets(blockHash *chainhash.Hash,
 					ticketHash, err)
 				continue
 			}
+			if isSSGEN,_ := stake.IsSSGen(vote) ;!isSSGEN{
+				log.Errorf("not a correct SSGEN format")
+				continue
+			}
 			votes[i] = vote
 		}
 		return nil
@@ -1053,6 +1058,11 @@ func (w *Wallet) handleMissedTickets(blockHash *chainhash.Hash, blockHeight int3
 					ticketHash, err)
 				continue
 			}
+			if _, err := stake.IsSSRtx(revocation); err != nil {
+				log.Errorf("Failed to sign revocation for ticket hash %v: %v",
+					ticketHash, err)
+			}
+		
 			revocations[i] = revocation
 		}
 		return nil
