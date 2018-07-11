@@ -42,7 +42,7 @@
   name = "github.com/coolsnady/bitset"
 
 [[constraint]]
-  branch = "v0.1.0"
+  branch = "blissstake"
   name = "github.com/coolsnady/hcd"
 
 [[constraint]]
