@@ -24,11 +24,7 @@ const (
 	//   - OP_DATA_33
 	//   - 33 bytes serialized compressed pubkey
 	RedeemP2PKHSigScriptSize = 1 + 73 + 1 + 33
-
-	
 	RedeemP2PKHAltSigScriptSize = 3 + 751 + 3 + 897 + 1
-
-
 
 	// P2PKHPkScriptSize is the size of a transaction output script that
 	// pays to a compressed pubkey hash.  It is calculated as:
@@ -42,6 +38,8 @@ const (
 	P2PKHPkScriptSize = 1 + 1 + 1 + 20 + 1 + 1
 
 	P2PKHAltScriptSize = 1 + 1 + 1 + 20 + 1 + 1 + 1
+
+	P2PKBlissPKScriptSize = 1 + 1 + 1 + 897 + 1 + 1
 
 	// RedeemP2PKHInputSize is the worst case (largest) serialize size of a
 	// transaction input redeeming a compressed P2PKH output.  It is

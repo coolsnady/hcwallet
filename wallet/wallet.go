@@ -851,7 +851,7 @@ func (w *Wallet) loadActiveAddrs(dbtx walletdb.ReadTx, chainClient *hcrpcclient.
 					}
 					if err != nil {
 						jobErrs <- err
-						return
+						break
 					}
 					addrs = append(addrs, addr)
 				}
