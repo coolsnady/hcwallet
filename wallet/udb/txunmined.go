@@ -297,7 +297,7 @@ func (s *Store) unminedTxHashes(ns walletdb.ReadBucket) ([]*chainhash.Hash, erro
 func (s *Store) PruneUnmined(dbtx walletdb.ReadWriteTx, stakeDiff int64) error {
 	ns := dbtx.ReadWriteBucket(wtxmgrBucketKey)
 
-	tipHash, tipHeight := s.MainChainTip(ns)
+	_, tipHeight := s.MainChainTip(ns)
 
 	type removeTx struct {
 		tx   wire.MsgTx
@@ -328,8 +328,8 @@ func (s *Store) PruneUnmined(dbtx walletdb.ReadWriteTx, stakeDiff int64) error {
 		case isSSGen:
 			isVote = true
 			// This will never actually error
-			votedBlockHash,_, _ := stake.SSGenBlockVotedOn(&tx)
-			if votedBlockHash == tipHash {
+			_, votedHeight, _ := stake.SSGenBlockVotedOn(&tx)
+			if uint32(tipHeight) <= votedHeight {
 				continue
 			}
 		default:
