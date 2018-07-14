@@ -1836,7 +1836,7 @@ func createUnsignedVote(ticketHash *chainhash.Hash, ticketPurchase *wire.MsgTx,
 
 	// Parse the ticket purchase transaction to determine the required output
 	// destinations for vote rewards or revocations.
-	ticketPayKinds, ticketHash160s, ticketValues, _, _, _ :=
+	ticketPayKinds, ticketHash160s, ticketValues, _, _, _,sigTypes :=
 		stake.TxSStxStakeOutputInfo(ticketPurchase)
 
 	// Calculate the subsidy for votes at this height.
@@ -1880,13 +1880,8 @@ func createUnsignedVote(ticketHash *chainhash.Hash, ticketPurchase *wire.MsgTx,
 		if ticketPayKinds[i] { // P2SH
 			scriptFn = txscript.PayToSSGenSHDirect
 		}
-		pkhChangePkScript := ticketPurchase.TxOut[0+2*i].PkScript
-		alType, err := txscript.ExtractPkScriptAltSigType(pkhChangePkScript[1:])
-		if err != nil {
-			alType = 0
-		}
 		// Error is checking for a nil hash160, just ignore it.
-		script, _ := scriptFn(hash160, alType)
+		script, _ := scriptFn(hash160, int(sigTypes[i]))
 		vote.AddTxOut(wire.NewTxOut(voteRewardValues[i], script))
 	}
 
@@ -1900,7 +1895,7 @@ func createUnsignedVote(ticketHash *chainhash.Hash, ticketPurchase *wire.MsgTx,
 func createUnsignedRevocation(ticketHash *chainhash.Hash, ticketPurchase *wire.MsgTx, feePerKB hcutil.Amount) (*wire.MsgTx, error) {
 	// Parse the ticket purchase transaction to determine the required output
 	// destinations for vote rewards or revocations.
-	ticketPayKinds, ticketHash160s, ticketValues, _, _, _ :=
+	ticketPayKinds, ticketHash160s, ticketValues, _, _, _, sigTypes :=
 		stake.TxSStxStakeOutputInfo(ticketPurchase)
 
 	// Calculate the output values for the revocation.  Revocations do not
@@ -1923,13 +1918,8 @@ func createUnsignedRevocation(ticketHash *chainhash.Hash, ticketPurchase *wire.M
 		if ticketPayKinds[i] { // P2SH
 			scriptFn = txscript.PayToSSRtxSHDirect
 		}
-		pkhChangePkScript := ticketPurchase.TxOut[0+2*i].PkScript
-		alType, err := txscript.ExtractPkScriptAltSigType(pkhChangePkScript[1:])
-		if err != nil {
-			alType = 0
-		}
 		// Error is checking for a nil hash160, just ignore it.
-		script, _ := scriptFn(hash160, alType)
+		script, _ := scriptFn(hash160, int(sigTypes[i]))
 		revocation.AddTxOut(wire.NewTxOut(revocationValues[i], script))
 	}
 
