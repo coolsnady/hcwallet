@@ -1109,6 +1109,7 @@ func (w *Wallet) FetchHeaders(chainClient *hcrpcclient.Client) (count int, resca
 		// Remove blocks after the side chain fork point.  Block locators should
 		// now begin here, avoiding any issues with calling getheaders with
 		// side chain hashes.
+		log.Infof("rollback from current height %n to height %n", commonAncestorHeight, height+1)
 		return w.TxStore.Rollback(txmgrNs, addrmgrNs, height+1)
 	})
 	if err != nil {
