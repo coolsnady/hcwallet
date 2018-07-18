@@ -21,6 +21,7 @@ import (
 	"github.com/coolsnady/hcwallet/wallet/internal/txsizes"
 	"github.com/coolsnady/hcwallet/wallet/txrules"
 	"github.com/coolsnady/hcwallet/wallet/udb"
+	"github.com/coolsnady/hcwallet/walletdb"
 )
 
 const (
@@ -75,7 +76,7 @@ type AuthoredTx struct {
 
 // ChangeSource provides P2PKH change output scripts and versions for
 // transaction creation.
-type ChangeSource func() ([]byte, uint16, error)
+type ChangeSource func(dbtx walletdb.ReadWriteTx) ([]byte, uint16, error)
 
 // NewUnsignedTransaction creates an unsigned transaction paying to one or more
 // non-change outputs.  An appropriate transaction fee is included based on the
@@ -133,7 +134,7 @@ func NewUnsignedTransaction(outputs []*wire.TxOut, relayFeePerKb hcutil.Amount,
 		changeAmount := inputAmount - targetAmount - maxRequiredFee
 		if changeAmount != 0 && !txrules.IsDustAmount(changeAmount,
 			txsizes.P2PKHPkScriptSize, relayFeePerKb) {
-			changeScript, changeScriptVersion, err := fetchChange()
+			changeScript, changeScriptVersion, err := fetchChange(nil)
 			if err != nil {
 				return nil, err
 			}

@@ -124,6 +124,7 @@ var rpcHandlers = map[string]struct {
 	"sendfrom":                {handlerWithChain: sendFrom},
 	"sendmany":                {handler: sendMany},
 	"sendtoaddress":           {handler: sendToAddress},
+	"getstraightpubkey":       {handlerWithChain: getStraightPubKey},
 	"sendtomultisig":          {handlerWithChain: sendToMultiSig},
 	"sendtosstx":              {handlerWithChain: sendToSStx},
 	"sendtossgen":             {handler: sendToSSGen},
@@ -354,7 +355,7 @@ func accountSyncAddressIndex(icmd interface{}, w *wallet.Wallet) (interface{}, e
 
 func makeMultiSigScript(w *wallet.Wallet, keys []string,
 	nRequired int) ([]byte, error) {
-	keysesPrecious := make([]*hcutil.AddressSecpPubKey, len(keys))
+	keysesPrecious := make([]hcutil.Address, len(keys))
 
 	// The address list will made up either of addreseses (pubkey hash), for
 	// which we need to look up the keys in wallet, straight pubkeys, or a
@@ -2348,6 +2349,49 @@ func sendToAddress(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 	return sendPairs(w, pairs, udb.DefaultAccountNum, 1)
 }
 
+// getStraightPubKey handles a getStraightPubKey RPC request by getting a straight public key
+func getStraightPubKey(icmd interface{}, w *wallet.Wallet, chainClient *hcrpcclient.Client) (interface{}, error) {
+	cmd := icmd.(*dcrjson.GetStraightPubKeyCmd)
+
+	a, err := decodeAddress(cmd.SrcAddress, w.ChainParams())
+	if err != nil {
+		return nil, err
+	}
+
+	result := &dcrjson.GetStraightPubKeyResult{
+		StraightPubKey: "",
+	}
+
+	switch addr := a.(type) {
+	case *hcutil.AddressPubKeyHash:
+		pubKey, err := w.PubKeyForAddress(addr)
+		if err != nil {
+			return nil, err
+		}
+		enumECType := pubKey.GetType()
+		switch enumECType {
+		case chainec.ECTypeSecp256k1:
+			pubKeyAddr, err := hcutil.NewAddressSecpPubKey(pubKey.Serialize(), w.ChainParams())
+			if err != nil {
+				return nil, err
+			}
+			result.StraightPubKey = pubKeyAddr.String()
+		case chainec.ECTypeBliss:
+			pubKeyAddr, err := hcutil.NewAddressBlissPubKey(pubKey.Serialize(), w.ChainParams())
+			if err != nil {
+				return nil, err
+			}
+			result.StraightPubKey = pubKeyAddr.String()
+		default:
+			return nil, errors.New("only secp256k1 and bliss " +
+				"pubkeys are currently supported")
+		}
+		return result, nil
+	default:
+		return nil, errors.New("unknow error.")
+	}
+}
+
 // sendToMultiSig handles a sendtomultisig RPC request by creating a new
 // transaction spending amount many funds to an output containing a multi-
 // signature script hash. The function will fail if there isn't at least one
@@ -2368,7 +2412,7 @@ func sendToMultiSig(icmd interface{}, w *wallet.Wallet, chainClient *hcrpcclient
 	}
 	nrequired := int8(*cmd.NRequired)
 	minconf := int32(*cmd.MinConf)
-	pubkeys := make([]*hcutil.AddressSecpPubKey, len(cmd.Pubkeys))
+	pubkeys := make([]hcutil.Address, len(cmd.Pubkeys))
 
 	// The address list will made up either of addreseses (pubkey hash), for
 	// which we need to look up the keys in wallet, straight pubkeys, or a
@@ -2383,21 +2427,34 @@ func sendToMultiSig(icmd interface{}, w *wallet.Wallet, chainClient *hcrpcclient
 		switch addr := a.(type) {
 		case *hcutil.AddressSecpPubKey:
 			pubkeys[i] = addr
+		case *hcutil.AddressBlissPubKey:
+			pubkeys[i] = addr
 		default:
 			pubKey, err := w.PubKeyForAddress(addr)
 			if err != nil {
 				return nil, err
 			}
-			if pubKey.GetType() != chainec.ECTypeSecp256k1 {
-				return nil, errors.New("only secp256k1 " +
+			enumECType := pubKey.GetType()
+			switch enumECType {
+			case chainec.ECTypeSecp256k1:
+				pubKeyAddr, err := hcutil.NewAddressSecpPubKey(
+					pubKey.Serialize(), w.ChainParams())
+				if err != nil {
+					return nil, err
+				}
+				pubkeys[i] = pubKeyAddr
+			case chainec.ECTypeBliss:
+				pubKeyAddr, err := hcutil.NewAddressBlissPubKey(
+					pubKey.Serialize(), w.ChainParams())
+				if err != nil {
+					return nil, err
+				}
+				pubkeys[i] = pubKeyAddr
+				fmt.Println("bliss len:", len(pubKeyAddr.String()))
+			default:
+				return nil, errors.New("only secp256k1 and bliss " +
 					"pubkeys are currently supported")
 			}
-			pubKeyAddr, err := hcutil.NewAddressSecpPubKey(
-				pubKey.Serialize(), w.ChainParams())
-			if err != nil {
-				return nil, err
-			}
-			pubkeys[i] = pubKeyAddr
 		}
 	}
 

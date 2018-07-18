@@ -7,8 +7,6 @@ package wallet
 
 import (
 	"errors"
-
-	"github.com/coolsnady/hcd/chaincfg/chainec"
 	"github.com/coolsnady/hcd/txscript"
 	"github.com/coolsnady/hcd/wire"
 	"github.com/coolsnady/hcutil"
@@ -25,59 +23,8 @@ import (
 // This function only works with secp256k1 pubkeys and P2PKH addresses derived
 // from them.
 func (w *Wallet) MakeSecp256k1MultiSigScript(secp256k1Addrs []hcutil.Address, nRequired int) ([]byte, error) {
-	secp256k1PubKeys := make([]*hcutil.AddressSecpPubKey, len(secp256k1Addrs))
-
-	var dbtx walletdb.ReadTx
-	var addrmgrNs walletdb.ReadBucket
-	defer func() {
-		if dbtx != nil {
-			dbtx.Rollback()
-		}
-	}()
-
-	// The address list will made up either of addreseses (pubkey hash), for
-	// which we need to look up the keys in wallet, straight pubkeys, or a
-	// mixture of the two.
-	for i, addr := range secp256k1Addrs {
-		switch addr := addr.(type) {
-		default:
-			return nil, errors.New("cannot make multisig script for " +
-				"a non-secp256k1 public key or P2PKH address")
-
-		case *hcutil.AddressSecpPubKey:
-			secp256k1PubKeys[i] = addr
-
-		case *hcutil.AddressPubKeyHash:
-			if addr.DSA(w.chainParams) != chainec.ECTypeSecp256k1 {
-				return nil, errors.New("cannot make multisig " +
-					"script for a non-secp256k1 P2PKH address")
-			}
-
-			if dbtx == nil {
-				var err error
-				dbtx, err = w.db.BeginReadTx()
-				if err != nil {
-					return nil, err
-				}
-				addrmgrNs = dbtx.ReadBucket(waddrmgrNamespaceKey)
-			}
-			addrInfo, err := w.Manager.Address(addrmgrNs, addr)
-			if err != nil {
-				return nil, err
-			}
-			serializedPubKey := addrInfo.(udb.ManagedPubKeyAddress).
-				PubKey().Serialize()
-
-			pubKeyAddr, err := hcutil.NewAddressSecpPubKey(
-				serializedPubKey, w.chainParams)
-			if err != nil {
-				return nil, err
-			}
-			secp256k1PubKeys[i] = pubKeyAddr
-		}
-	}
-
-	return txscript.MultiSigScript(secp256k1PubKeys, nRequired)
+	
+	return txscript.MultiSigScript(secp256k1Addrs, nRequired)
 }
 
 // ImportP2SHRedeemScript adds a P2SH redeem script to the wallet.

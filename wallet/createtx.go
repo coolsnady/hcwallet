@@ -506,7 +506,7 @@ func (w *Wallet) txToOutputsInternal(outputs []*wire.TxOut, account uint32, minc
 // txToMultisig spends funds to a multisig output, partially signs the
 // transaction, then returns fund
 func (w *Wallet) txToMultisig(account uint32, amount hcutil.Amount,
-	pubkeys []*hcutil.AddressSecpPubKey, nRequired int8,
+	pubkeys []hcutil.Address, nRequired int8,
 	minconf int32) (*CreatedTx, hcutil.Address, []byte, error) {
 
 	var (
@@ -524,7 +524,7 @@ func (w *Wallet) txToMultisig(account uint32, amount hcutil.Amount,
 }
 
 func (w *Wallet) txToMultisigInternal(dbtx walletdb.ReadWriteTx, account uint32,
-	amount hcutil.Amount, pubkeys []*hcutil.AddressSecpPubKey, nRequired int8,
+	amount hcutil.Amount, pubkeys []hcutil.Address, nRequired int8,
 	minconf int32) (*CreatedTx, hcutil.Address, []byte, error) {
 
 	addrmgrNs := dbtx.ReadWriteBucket(waddrmgrNamespaceKey)
@@ -632,7 +632,7 @@ func (w *Wallet) txToMultisigInternal(dbtx walletdb.ReadWriteTx, account uint32,
 			"multisig address after accounting for fees"))
 	}
 	if totalInput > amount+feeEst {
-		pkScript, _, err := w.changeSource(w.persistReturnedChild(dbtx), account)()
+		pkScript, _, err := w.changeSource(w.persistReturnedChild(dbtx), account)(dbtx)
 		if err != nil {
 			return txToMultisigError(err)
 		}
@@ -1671,7 +1671,8 @@ func (w *Wallet) findEligibleOutputsAmount(dbtx walletdb.ReadTx, account uint32,
 			!(class == txscript.PubKeyHashTy ||
 				class == txscript.StakeGenTy ||
 				class == txscript.StakeRevocationTy ||
-				class == txscript.StakeSubChangeTy) {
+				class == txscript.StakeSubChangeTy ||
+				class == txscript.PubkeyHashAltTy) {
 			continue
 		}
 

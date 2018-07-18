@@ -398,6 +398,10 @@ var helpDescsEnUS = map[string]string{
 	"sendtoaddress-commentto": "Unused",
 	"sendtoaddress--result0":  "The transaction hash of the sent transaction",
 
+	//GetStraightPubKeyCmd help
+	"getstraightpubkey--synopsis":  "input a publick key hash, and return a straight public key.",
+	"getstraightpubkey-ScrAddress": "public key hash.",
+
 	// SendToMultisigCmd help.
 	"sendtomultisig--synopsis": "Authors, signs, and sends a transaction that outputs some amount to a multisig address.\n" +
 		"Unlike sendfrom, outputs are always chosen from the default account.\n" +

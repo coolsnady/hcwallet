@@ -1245,7 +1245,7 @@ type (
 	createMultisigTxRequest struct {
 		account   uint32
 		amount    hcutil.Amount
-		pubkeys   []*hcutil.AddressSecpPubKey
+		pubkeys   []hcutil.Address
 		nrequired int8
 		minconf   int32
 		resp      chan createMultisigTxResponse
@@ -1457,7 +1457,7 @@ func (w *Wallet) CreateSimpleTx(account uint32, outputs []*wire.TxOut,
 // CreateMultisigTx receives a request from the RPC and ships it to txCreator to
 // generate a new multisigtx.
 func (w *Wallet) CreateMultisigTx(account uint32, amount hcutil.Amount,
-	pubkeys []*hcutil.AddressSecpPubKey, nrequired int8,
+	pubkeys []hcutil.Address, nrequired int8,
 	minconf int32) (*CreatedTx, hcutil.Address, []byte, error) {
 
 	req := createMultisigTxRequest{
