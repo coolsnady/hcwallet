@@ -9,17 +9,18 @@ package txauthor
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/coolsnady/hcd/chaincfg"
 	"github.com/coolsnady/hcd/chaincfg/chainec"
+	"github.com/coolsnady/hcd/crypto/bliss"
 	"github.com/coolsnady/hcd/txscript"
 	"github.com/coolsnady/hcd/wire"
 	"github.com/coolsnady/hcutil"
-	"github.com/coolsnady/hcwallet/wallet/txrules"
-
 	h "github.com/coolsnady/hcwallet/internal/helpers"
 	"github.com/coolsnady/hcwallet/wallet/internal/txsizes"
-	"github.com/coolsnady/hcd/crypto/bliss"
+	"github.com/coolsnady/hcwallet/wallet/txrules"
+	"github.com/coolsnady/hcwallet/wallet/udb"
 )
 
 const (
@@ -136,10 +137,22 @@ func NewUnsignedTransaction(outputs []*wire.TxOut, relayFeePerKb hcutil.Amount,
 			if err != nil {
 				return nil, err
 			}
-			if len(changeScript) > txsizes.P2PKHPkScriptSize + 1 {
-				return nil, errors.New("fee estimation requires change " +
-					"scripts no larger than P2PKH output scripts")
+
+			if accType == udb.AcctypeEc {
+				if len(changeScript) > txsizes.P2PKHPkScriptSize+1 {
+					return nil, errors.New("fee estimation requires change " +
+						"scripts no larger than P2PKH output scripts")
+				}
+			} else if accType == udb.AcctypeBliss {
+				if len(changeScript) > txsizes.P2PKBlissPKScriptSize+1 {
+					return nil, errors.New("fee estimation requires change " +
+						"scripts no larger than P2PKH output scripts")
+				}
+			} else {
+				errStr := fmt.Sprintf("err account type:%d", accType)
+				return nil, errors.New(errStr)
 			}
+
 			change := &wire.TxOut{
 				Value:    int64(changeAmount),
 				Version:  changeScriptVersion,

@@ -1842,7 +1842,7 @@ func purchaseTicket(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 	}
 
 	if cmd.FromAccount == udb.BlissAccountName {
-		return nil, fmt.Errorf("unsupported account type for buying tickets")
+		//return nil, fmt.Errorf("unsupported account type for buying tickets")
 	}
 
 	account, err := w.AccountNumber(cmd.FromAccount)

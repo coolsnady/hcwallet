@@ -1676,6 +1676,7 @@ func (m *Manager) syncAccountToAddrIndex(ns walletdb.ReadWriteBucket, account ui
 			}
 			// This can't error as only good input is passed to
 			// hcutil.NewAddressPubKeyHash.
+
 			addr, _ := xpubChild.Address(m.chainParams, AcctypeBliss)
 			//Question
 
@@ -1684,6 +1685,7 @@ func (m *Manager) syncAccountToAddrIndex(ns walletdb.ReadWriteBucket, account ui
 				// address was found and there are no more to generate
 				break
 			}
+
 			err = putChainedAddress(ns, addr, account, SSFull, branch, child)
 			if err != nil {
 				return err

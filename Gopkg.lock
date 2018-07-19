@@ -79,13 +79,13 @@
     "txscript",
     "wire"
   ]
-  revision = "cc9372b2fee8b09f93e620fbfecffdc49b69cae4"
+  revision = "6705f1eedbc2bc619f53e1c1e5f2af462e8ec045"
 
 [[projects]]
   branch = "master"
   name = "github.com/coolsnady/hcrpcclient"
   packages = ["."]
-  revision = "879be0319f825d6722ba9abc4a936d34633065c3"
+  revision = "7d2c5edc4fefbcbe32a6dfa087f3346e133830e9"
 
 [[projects]]
   branch = "master"
@@ -95,7 +95,7 @@
     "base58",
     "hdkeychain"
   ]
-  revision = "b67ae246338f47ffd45c31463606fcdf1e982ee2"
+  revision = "f2e7d07d402b391c8caae2049f64acb5bb0cac19"
 
 [[projects]]
   name = "github.com/davecgh/go-spew"
@@ -173,7 +173,7 @@
     "internal/timeseries",
     "trace"
   ]
-  revision = "afe8f62b1d6bbd81f31868121a50b06d8188e1f9"
+  revision = "32a936f46389aa10549d60bd7833e54b01685d09"
 
 [[projects]]
   branch = "master"
@@ -188,7 +188,7 @@
     "unix",
     "windows"
   ]
-  revision = "a200a19cb90b19de298170992778b1fda7217bd6"
+  revision = "ce36f3865eeb42541ce3f87f32f8462c5687befa"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -215,7 +215,7 @@
   branch = "master"
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
-  revision = "80063a038e333bbe006c878e4c5ce4c74d055498"
+  revision = "ff3583edef7de132f219f0efc00e097cabcc0ec0"
 
 [[projects]]
   name = "google.golang.org/grpc"
@@ -252,6 +252,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "9f722bfa8569528031904ad46bd4d194dda0a8e3a700910834b2e9f479a78a44"
+  inputs-digest = "5e8f66d8498dc964571db14b102fd852c6d3ea8d500fcb0bc72ebb33cc660436"
   solver-name = "gps-cdcl"
   solver-version = 1

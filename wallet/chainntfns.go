@@ -281,8 +281,9 @@ func (w *Wallet) onBlockConnected(serializedBlockHeader []byte, transactions [][
 	// Prune all expired transactions and all stake tickets that no longer
 	// meet the minimum stake difficulty.
 	err = walletdb.Update(w.db, func(dbtx walletdb.ReadWriteTx) error {
-		txmgrNs := dbtx.ReadWriteBucket(wtxmgrNamespaceKey)
-		return w.TxStore.PruneUnconfirmed(txmgrNs, height, blockHeader.SBits)
+	//	txmgrNs := dbtx.ReadWriteBucket(wtxmgrNamespaceKey)
+	//	return w.TxStore.PruneUnconfirmed(txmgrNs, height, blockHeader.SBits)
+		return w.TxStore.PruneUnmined(dbtx, blockHeader.SBits)
 	})
 	if err != nil {
 		log.Errorf("Failed to prune unconfirmed transactions when "+
@@ -945,6 +946,10 @@ func (w *Wallet) handleWinningTickets(blockHash *chainhash.Hash,
 					ticketHash, err)
 				continue
 			}
+			if isSSGEN,_ := stake.IsSSGen(vote) ;!isSSGEN{
+				log.Errorf("not a correct SSGEN format")
+				continue
+			}
 			votes[i] = vote
 		}
 		return nil
@@ -952,41 +957,43 @@ func (w *Wallet) handleWinningTickets(blockHash *chainhash.Hash,
 	if err != nil {
 		log.Errorf("View failed: %v", err)
 	}
-
+	
 	for i, vote := range votes {
-		if vote == nil {
-			continue
-		}
-		txRec, err := udb.NewTxRecordFromMsgTx(vote, time.Now())
-		if err != nil {
-			log.Errorf("Failed to create transaction record for vote %v: %v",
-				ticketHashes[i], err)
-			continue
-		}
-		voteHash := &txRec.Hash
-		err = walletdb.Update(w.db, func(dbtx walletdb.ReadWriteTx) error {
-			err := w.processTransactionRecord(dbtx, txRec, nil, nil)
-			if err != nil {
-				return err
+		go func(i int ,vote *wire.MsgTx){
+			if vote == nil {
+				return
 			}
-			err = w.StakeMgr.StoreVoteInfo(dbtx, ticketHashes[i], voteHash,
-				blockHash, blockHeight, voteBits)
+			txRec, err := udb.NewTxRecordFromMsgTx(vote, time.Now())
 			if err != nil {
-				return err
+				log.Errorf("Failed to create transaction record for vote %v: %v",
+					ticketHashes[i], err)
+					return
 			}
-			_, err = chainClient.SendRawTransaction(vote, true)
-			return err
-		})
-		if err != nil {
-			log.Errorf("Failed to send vote for ticket hash %v: %v",
-				ticketHashes[i], err)
-			continue
-		}
-		log.Infof("Voted on block %v (height %v) using ticket %v "+
-			"(vote hash: %v bits: %v)", blockHash, blockHeight,
-			ticketHashes[i], voteHash, voteBits.Bits)
-	}
+			voteHash := &txRec.Hash
+			err = walletdb.Update(w.db, func(dbtx walletdb.ReadWriteTx) error {
+				err := w.processTransactionRecord(dbtx, txRec, nil, nil)
+				if err != nil {
+					return err
+				}
+				err = w.StakeMgr.StoreVoteInfo(dbtx, ticketHashes[i], voteHash,
+					blockHash, blockHeight, voteBits)
+				if err != nil {
+					return err
+				}
 
+				_, err = chainClient.SendRawTransaction(vote, true)
+				return err
+			})
+			if err !=nil {
+				log.Errorf("Failed to send vote for ticket hash %v: %v",
+					ticketHashes[i], err)
+					return
+			}
+			log.Infof("Voted on block %v (height %v) using ticket %v "+
+				"(vote hash: %v bits: %v)", blockHash, blockHeight,
+				ticketHashes[i], voteHash, voteBits.Bits)
+		}(i,vote)
+	}
 	return nil
 }
 
@@ -1053,6 +1060,11 @@ func (w *Wallet) handleMissedTickets(blockHash *chainhash.Hash, blockHeight int3
 					ticketHash, err)
 				continue
 			}
+			if _, err := stake.IsSSRtx(revocation); err != nil {
+				log.Errorf("Failed to sign revocation for ticket hash %v: %v",
+					ticketHash, err)
+			}
+		
 			revocations[i] = revocation
 		}
 		return nil

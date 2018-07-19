@@ -154,14 +154,13 @@ func (w *Wallet) deferPersistReturnedChild(updates *[]func(walletdb.ReadWriteTx)
 }
 
 // nextAddress returns the next address of an account branch.
-func (w *Wallet) nextAddress(persist persistReturnedChildFunc, accountinfo *udb.AccountProperties, branch uint32,
+func (w *Wallet) nextAddress(persist persistReturnedChildFunc, accountinfo *udb.AccountProperties, branch uint32, rwTx walletdb.ReadWriteTx,
 	callOpts ...NextAddressCallOption) (hcutil.Address, error) {
 
 	var opts nextAddressCallOptions // TODO: zero values for now, add to wallet config later.
 	for _, c := range callOpts {
 		c(&opts)
 	}
-
 	gapLimit := uint32(w.gapLimit)
 
 	defer w.addressBuffersMu.Unlock()
@@ -215,7 +214,7 @@ func (w *Wallet) nextAddress(persist persistReturnedChildFunc, accountinfo *udb.
 						return nil, err
 					}
 				} else if accountinfo.AccountType == udb.AcctypeBliss {
-					err = walletdb.Update(w.db, func(tx walletdb.ReadWriteTx) error {
+					err = walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 						accountpriv, err := w.Manager.AccountExtendedPrivKey(tx, accountinfo.AccountNumber)
 						if err != nil {
 							return err
@@ -224,6 +223,7 @@ func (w *Wallet) nextAddress(persist persistReturnedChildFunc, accountinfo *udb.
 						if err != nil {
 							return err
 						}
+
 						for i := uint32(1); i <= gapLimit; i++ {
 							childIndex := alb.lastUsed + i + alb.cursor
 							addrpriv, err := branchpriv.Child(childIndex)
@@ -241,6 +241,7 @@ func (w *Wallet) nextAddress(persist persistReturnedChildFunc, accountinfo *udb.
 							addrs = append(addrs, addr)
 							addrpriv.Zero()
 						}
+
 						branchpriv.Zero()
 						return nil
 					})
@@ -275,7 +276,7 @@ func (w *Wallet) nextAddress(persist persistReturnedChildFunc, accountinfo *udb.
 			}
 			addr, err = child.Address(w.chainParams, child.GetAlgType())
 		} else if accountinfo.AccountType == udb.AcctypeBliss {
-			err = walletdb.Update(w.db, func(tx walletdb.ReadWriteTx) error {
+			err = walletdb.View(w.db, func(tx walletdb.ReadTx) error {
 				accountpriv, err := w.Manager.AccountExtendedPrivKey(tx, accountinfo.AccountNumber)
 				if err != nil {
 					return err
@@ -288,11 +289,13 @@ func (w *Wallet) nextAddress(persist persistReturnedChildFunc, accountinfo *udb.
 				if err != nil {
 					return err
 				}
+
 				addrpub, err := addrpriv.Neuter()
 				if err != nil {
 					return err
 				}
 				addr, err = addrpub.Address(w.chainParams, addrpriv.GetAlgType())
+
 				addrpriv.Zero()
 				branchpriv.Zero()
 				return nil
@@ -300,6 +303,7 @@ func (w *Wallet) nextAddress(persist persistReturnedChildFunc, accountinfo *udb.
 		} else {
 			return nil, fmt.Errorf("unknown address type")
 		}
+
 		switch err {
 		case nil:
 			// Write the returned child index to the database.
@@ -307,25 +311,35 @@ func (w *Wallet) nextAddress(persist persistReturnedChildFunc, accountinfo *udb.
 			if err != nil {
 				return nil, err
 			}
+
 			if accountinfo.AccountType == udb.AcctypeBliss {
-				err := walletdb.Update(w.db, func(tx walletdb.ReadWriteTx) error {
-					addrmgrNs := tx.ReadWriteBucket(waddrmgrNamespaceKey)
+				if rwTx == nil {
+					err = walletdb.Update(w.db, func(tx walletdb.ReadWriteTx) error {
+						addrmgrNs := tx.ReadWriteBucket(waddrmgrNamespaceKey)
+						err = udb.PutChainedBlissAddress(addrmgrNs, addr, accountinfo.AccountNumber, udb.SSFull, branch, childIndex)
+						if err != nil {
+							return err
+						}
+
+						return nil
+					})
+				} else {
+					addrmgrNs := rwTx.ReadWriteBucket(waddrmgrNamespaceKey)
 					err = udb.PutChainedBlissAddress(addrmgrNs, addr, accountinfo.AccountNumber, udb.SSFull, branch, childIndex)
-					if err != nil {
-						return err
-					}
-					return nil
-				})
+				}
+
 				if err != nil {
 					return nil, err
 				}
 			}
+
 			alb.cursor++
 			addresses := make([]hcutil.Address, 0, 1)
 			addresses = append(addresses, addr)
 			if chainClient != nil {
 				err = chainClient.LoadTxFilter(false, addresses, nil)
 			}
+
 			if err != nil {
 				return nil, err
 			}
@@ -516,7 +530,7 @@ func (w *Wallet) NewExternalAddress(account uint32, callOpts ...NextAddressCallO
 	if w.Manager.IsLocked() && accountinfo.AccountType == udb.AcctypeBliss {
 		return nil, fmt.Errorf("wallet is locked")
 	}
-	return w.nextAddress(w.persistReturnedChild(nil), accountinfo, udb.ExternalBranch, callOpts...)
+	return w.nextAddress(w.persistReturnedChild(nil), accountinfo, udb.ExternalBranch, nil, callOpts...)
 }
 
 // NewInternalAddress returns an internal address.
@@ -537,10 +551,10 @@ func (w *Wallet) NewInternalAddress(account uint32, callOpts ...NextAddressCallO
 	if w.Manager.IsLocked() && accountinfo.AccountType == udb.AcctypeBliss {
 		return nil, fmt.Errorf("wallet is locked")
 	}
-	return w.nextAddress(w.persistReturnedChild(nil), accountinfo, udb.InternalBranch, callOpts...)
+	return w.nextAddress(w.persistReturnedChild(nil), accountinfo, udb.InternalBranch, nil, callOpts...)
 }
 
-func (w *Wallet) newChangeAddress(persist persistReturnedChildFunc, account uint32) (hcutil.Address, error) {
+func (w *Wallet) newChangeAddress(persist persistReturnedChildFunc, account uint32, rwTx walletdb.ReadWriteTx) (hcutil.Address, error) {
 	// Addresses can not be generated for the imported account, so as a
 	// workaround, change is sent to the first account.
 	//
@@ -558,13 +572,14 @@ func (w *Wallet) newChangeAddress(persist persistReturnedChildFunc, account uint
 		}
 		return err
 	})
+
 	if err != nil {
 		return nil, err
 	}
 	if w.Manager.IsLocked() && accountinfo.AccountType == udb.AcctypeBliss {
 		return nil, fmt.Errorf("wallet is locked")
 	}
-	return w.nextAddress(persist, accountinfo, udb.InternalBranch, WithGapPolicyWrap())
+	return w.nextAddress(persist, accountinfo, udb.InternalBranch, rwTx, WithGapPolicyWrap())
 }
 
 // NewChangeAddress returns an internal address.  This is identical to
@@ -572,7 +587,7 @@ func (w *Wallet) newChangeAddress(persist persistReturnedChildFunc, account uint
 // addresses) by using account 0 instead, and always uses the wrapping gap limit
 // policy.
 func (w *Wallet) NewChangeAddress(account uint32) (hcutil.Address, error) {
-	return w.newChangeAddress(w.persistReturnedChild(nil), account)
+	return w.newChangeAddress(w.persistReturnedChild(nil), account, nil)
 }
 
 // BIP0044BranchNextIndexes returns the next external and internal branch child
@@ -599,6 +614,7 @@ func (w *Wallet) ExtendWatchedAddresses(account, branch, child uint32) error {
 		branchXpub, branchXpriv *hdkeychain.ExtendedKey
 		lastUsed                uint32
 	)
+
 	err := walletdb.Update(w.db, func(tx walletdb.ReadWriteTx) error {
 		var err error
 		defer w.addressBuffersMu.Unlock()
@@ -718,7 +734,7 @@ func (w *Wallet) AccountBranchAddressRange(account, branch, start, end uint32) (
 
 func (w *Wallet) changeSource(persist persistReturnedChildFunc, account uint32) txauthor.ChangeSource {
 	return func() ([]byte, uint16, error) {
-		changeAddress, err := w.newChangeAddress(persist, account)
+		changeAddress, err := w.newChangeAddress(persist, account, nil)
 		if err != nil {
 			return nil, 0, err
 		}
