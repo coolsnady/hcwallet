@@ -48,11 +48,15 @@ const (
 	// appended to the end of the signature.
 	sigScriptEstimate = 1 + 73 + 1 + 33 + 1
 
+	sigScriptEstimateBliss = 1 + 727 + 1 + 897 + 1
+
 	// A best case tx input serialization cost is chainhash.HashSize, 4 bytes
 	// of output index, 1 byte for tree, 4 bytes of sequence, 16 bytes for
 	// fraud proof, 1 varint for the sigscript size, and the estimated
 	// signature script size.
 	txInEstimate = chainhash.HashSize + 4 + 1 + 4 + 16 + 1 + sigScriptEstimate
+
+	txInEstimateBliss = chainhash.HashSize + 4 + 1 + 4 + 16 + 1 + sigScriptEstimateBliss
 
 	// A P2PKH pkScript contains the following bytes:
 	//  - OP_DUP
@@ -105,15 +109,22 @@ var (
 	maxTxSize = chaincfg.MainNetParams.MaxTxSize
 )
 
-func estimateTxSize(numInputs, numOutputs int) int {
-	return txOverheadEstimate + txInEstimate*numInputs + txOutEstimate*numOutputs
+func estimateTxSize(numInputs, numOutputs int, account uint32) int {
+	var txInEst int
+	if uint8(account) == udb.AcctypeBliss {
+		txInEst = txInEstimateBliss
+	} else {
+		txInEst = txInEstimate
+	}
+	return txOverheadEstimate + txInEst*numInputs + txOutEstimate*numOutputs
+
 }
 
 // EstimateTxSize is the exported version of estimateTxSize which provides
 // an estimate of the tx size based on the number of inputs, outputs, and some
 // assumed overhead.
-func EstimateTxSize(numInputs, numOutputs int) int {
-	return estimateTxSize(numInputs, numOutputs)
+func EstimateTxSize(numInputs, numOutputs int, account uint32) int {
+	return estimateTxSize(numInputs, numOutputs, account)
 }
 
 func feeForSize(incr hcutil.Amount, sz int) hcutil.Amount {
@@ -582,6 +593,8 @@ func (w *Wallet) txToMultisigInternal(dbtx walletdb.ReadWriteTx, account uint32,
 	totalInput := hcutil.Amount(0)
 	numInputs := 0
 	for _, e := range eligible {
+		fmt.Println("eligible：", e.OutPoint.Hash)
+		fmt.Println("e.Amount:", e.Amount)
 		msgtx.AddTxIn(wire.NewTxIn(&e.OutPoint, nil))
 		totalInput += e.Amount
 		forSigning = append(forSigning, e)
@@ -622,7 +635,7 @@ func (w *Wallet) txToMultisigInternal(dbtx walletdb.ReadWriteTx, account uint32,
 	// totalInput == amount+feeEst is skipped because
 	// we don't need to add a change output in this
 	// case.
-	feeSize := estimateTxSize(numInputs, 2)
+	feeSize := estimateTxSize(numInputs, 2, account)
 	feeIncrement := w.RelayFee()
 
 	feeEst := feeForSize(feeIncrement, feeSize)
@@ -749,7 +762,7 @@ func (w *Wallet) compressWalletInternal(dbtx walletdb.ReadWriteTx, maxNumIns int
 
 	// Get an initial fee estimate based on the number of selected inputs
 	// and added outputs, with no change.
-	szEst := estimateTxSize(txInCount, 1)
+	szEst := estimateTxSize(txInCount, 1, account)
 	feeIncrement := w.RelayFee()
 
 	feeEst := feeForSize(feeIncrement, szEst)
@@ -841,7 +854,6 @@ func makeTicket(params *chaincfg.Params, inputPool *extendedOutPoint,
 
 	// Create a new script which pays to the provided address with an
 	// SStx tagged output.
-
 	pkScript, err := txscript.PayToSStx(addrVote)
 	if err != nil {
 		return nil, err
@@ -973,6 +985,8 @@ func (w *Wallet) purchaseTickets(req purchaseTicketRequest) ([]*chainhash.Hash, 
 		return nil, err
 	}
 
+	account := req.account
+
 	// Ensure the minimum number of required confirmations is positive.
 	if req.minConf < 0 {
 		return nil, fmt.Errorf("need positive minconf")
@@ -1001,8 +1015,20 @@ func (w *Wallet) purchaseTickets(req purchaseTicketRequest) ([]*chainhash.Hash, 
 	// addrFunc returns a change address.
 	addrFunc := w.newChangeAddress
 	if w.addressReuse {
-		xpub := w.addressBuffers[udb.DefaultAccountNum].albExternal.branchXpub
-		addr, err := deriveChildAddress(xpub, 0, w.chainParams)
+		var err error
+		var addr hcutil.Address
+
+		if account == udb.DefaultAccountNum {
+			xpub := w.addressBuffers[udb.DefaultAccountNum].albExternal.branchXpub
+			addr, err = deriveChildAddress(xpub, 0, w.chainParams)
+		} else {
+			err = walletdb.View(w.db, func(tx walletdb.ReadTx) error {
+				addrmgrNs := tx.ReadBucket(waddrmgrNamespaceKey)
+				addr, err = w.Manager.LoadBlissAddr(addrmgrNs, account, udb.ExternalBranch, 0)
+				return err
+			})
+		}
+
 		addrFunc = func(persistReturnedChildFunc, uint32, walletdb.ReadWriteTx) (hcutil.Address, error) {
 			return addr, err
 		}
@@ -1018,7 +1044,6 @@ func (w *Wallet) purchaseTickets(req purchaseTicketRequest) ([]*chainhash.Hash, 
 	// required plus fees for the split is larger than the
 	// balance we have, wasting an address. In the future,
 	// address this better and prevent address burning.
-	account := req.account
 
 	// Get the current ticket price from the daemon.
 	ticketPricesF64, err := w.ChainClient().GetStakeDifficulty()
@@ -1059,7 +1084,7 @@ func (w *Wallet) purchaseTickets(req purchaseTicketRequest) ([]*chainhash.Hash, 
 		ticketFeeIncrement = w.TicketFeeIncrement()
 	}
 
-	ticketFee, neededPerTicket, err := w.getTicketFeeAndNeededTicketPrice(account, poolAddress != nil,ticketPrice, ticketFeeIncrement)
+	ticketFee, neededPerTicket, err := w.getTicketFeeAndNeededTicketPrice(account, poolAddress != nil, ticketPrice, ticketFeeIncrement)
 
 	// If we need to calculate the amount for a pool fee percentage,
 	// do so now.
@@ -1837,7 +1862,7 @@ func createUnsignedVote(ticketHash *chainhash.Hash, ticketPurchase *wire.MsgTx,
 
 	// Parse the ticket purchase transaction to determine the required output
 	// destinations for vote rewards or revocations.
-	ticketPayKinds, ticketHash160s, ticketValues, _, _, _,sigTypes :=
+	ticketPayKinds, ticketHash160s, ticketValues, _, _, _, sigTypes :=
 		stake.TxSStxStakeOutputInfo(ticketPurchase)
 
 	// Calculate the subsidy for votes at this height.

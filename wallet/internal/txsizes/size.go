@@ -23,7 +23,7 @@ const (
 	//   - 72 bytes DER signature + 1 byte sighash
 	//   - OP_DATA_33
 	//   - 33 bytes serialized compressed pubkey
-	RedeemP2PKHSigScriptSize = 1 + 73 + 1 + 33
+	RedeemP2PKHSigScriptSize    = 1 + 73 + 1 + 33
 	RedeemP2PKHAltSigScriptSize = 3 + 751 + 3 + 897 + 1
 
 	// P2PKHPkScriptSize is the size of a transaction output script that
@@ -88,7 +88,7 @@ func EstimateSerializeSize(inputCount int, txOuts []*wire.TxOut, addChangeOutput
 	}
 	if accType == udb.AcctypeEc {
 		inputSize = RedeemP2PKHInputSize
-	}else if accType == udb.AcctypeBliss {
+	} else if accType == udb.AcctypeBliss {
 		inputSize = RedeemP2PKHAltInputSize
 	}
 

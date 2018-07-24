@@ -287,6 +287,7 @@ func (s *Store) unminedTxHashes(ns walletdb.ReadBucket) ([]*chainhash.Hash, erro
 	})
 	return hashes, err
 }
+
 // PruneUnmined removes unmined transactions that no longer belong in the
 // unmined tx set.  This includes:
 //

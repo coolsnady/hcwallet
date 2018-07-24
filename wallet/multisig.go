@@ -15,16 +15,15 @@ import (
 	"github.com/coolsnady/hcwallet/walletdb"
 )
 
-// MakeSecp256k1MultiSigScript creates a multi-signature script that can be
+// MakeMultiSigScript creates a multi-signature script that can be
 // redeemed with nRequired signatures of the passed keys and addresses.  If the
 // address is a P2PKH address, the associated pubkey is looked up by the wallet
 // if possible, otherwise an error is returned for a missing pubkey.
 //
 // This function only works with secp256k1 pubkeys and P2PKH addresses derived
 // from them.
-func (w *Wallet) MakeSecp256k1MultiSigScript(secp256k1Addrs []hcutil.Address, nRequired int) ([]byte, error) {
-	
-	return txscript.MultiSigScript(secp256k1Addrs, nRequired)
+func (w *Wallet) MakeMultiSigScript(addrs []hcutil.Address, nRequired int) ([]byte, error) {
+	return txscript.MultiSigScript(addrs, nRequired)
 }
 
 // ImportP2SHRedeemScript adds a P2SH redeem script to the wallet.

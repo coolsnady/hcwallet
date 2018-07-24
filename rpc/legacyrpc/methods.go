@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -375,16 +376,23 @@ func makeMultiSigScript(w *wallet.Wallet, keys []string,
 			if err != nil {
 				return nil, err
 			}
-			if pubKey.GetType() != chainec.ECTypeSecp256k1 {
-				return nil, errors.New("only secp256k1 " +
-					"pubkeys are currently supported")
+
+			pkType := pubKey.GetType()
+			if pkType == chainec.ECTypeSecp256k1 {
+				pubKeyAddr, err := hcutil.NewAddressSecpPubKey(pubKey.Serialize(), w.ChainParams())
+				if err != nil {
+					return nil, err
+				}
+				keysesPrecious[i] = pubKeyAddr
+			} else if pkType == chainec.ECTypeBliss {
+				pubKeyAddr, err := hcutil.NewAddressBlissPubKey(pubKey.Serialize(), w.ChainParams())
+				if err != nil {
+					return nil, err
+				}
+				keysesPrecious[i] = pubKeyAddr
+			} else {
+				return nil, fmt.Errorf("address type(%d) err", pkType)
 			}
-			pubKeyAddr, err := hcutil.NewAddressSecpPubKey(
-				pubKey.Serialize(), w.ChainParams())
-			if err != nil {
-				return nil, err
-			}
-			keysesPrecious[i] = pubKeyAddr
 		}
 	}
 
@@ -404,13 +412,14 @@ func addMultiSigAddress(icmd interface{}, w *wallet.Wallet, chainClient *hcrpccl
 	secp256k1Addrs := make([]hcutil.Address, len(cmd.Keys))
 	for i, k := range cmd.Keys {
 		addr, err := decodeAddress(k, w.ChainParams())
+		fmt.Print(addr.EncodeAddress())
 		if err != nil {
 			return nil, ParseError{err}
 		}
 		secp256k1Addrs[i] = addr
 	}
 
-	script, err := w.MakeSecp256k1MultiSigScript(secp256k1Addrs, cmd.NRequired)
+	script, err := w.MakeMultiSigScript(secp256k1Addrs, cmd.NRequired)
 	if err != nil {
 		return nil, err
 	}
@@ -754,6 +763,19 @@ func decodeAddress(s string, params *chaincfg.Params) (hcutil.Address, error) {
 		}
 		pubKeyAddr, err := hcutil.NewAddressSecpPubKey(pubKeyBytes,
 			params)
+		if err != nil {
+			return nil, err
+		}
+
+		return pubKeyAddr, nil
+	}
+
+	if len(s) == 1794 {
+		pubKeyBytes, err := hex.DecodeString(s)
+		if err != nil {
+			return nil, err
+		}
+		pubKeyAddr, err := hcutil.NewAddressBlissPubKey(pubKeyBytes, params)
 		if err != nil {
 			return nil, err
 		}
@@ -1842,10 +1864,6 @@ func purchaseTicket(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 		return nil, ErrNeedPositiveSpendLimit
 	}
 
-	if cmd.FromAccount == udb.BlissAccountName {
-		//return nil, fmt.Errorf("unsupported account type for buying tickets")
-	}
-
 	account, err := w.AccountNumber(cmd.FromAccount)
 	if err != nil {
 		return nil, err
@@ -2033,7 +2051,8 @@ func redeemMultiSigOut(icmd interface{}, w *wallet.Wallet, chainClient *hcrpccli
 
 	// Calculate the fees required, and make sure we have enough.
 	// Then produce the txout.
-	size := wallet.EstimateTxSize(1, 1)
+	account := uint32(udb.DefaultAccountNum)
+	size := wallet.EstimateTxSize(1, 1, account)
 	feeEst := wallet.FeeForSize(w.RelayFee(), size)
 	if feeEst >= p2shOutput.OutputAmount {
 		return nil, fmt.Errorf("multisig out amt is too small "+
@@ -2101,6 +2120,7 @@ func redeemMultiSigOuts(icmd interface{}, w *wallet.Wallet, chainClient *hcrpccl
 		return nil, err
 	}
 	p2shAddr, ok := addr.(*hcutil.AddressScriptHash)
+
 	if !ok {
 		return nil, errors.New("address is not P2SH")
 	}
@@ -2114,12 +2134,13 @@ func redeemMultiSigOuts(icmd interface{}, w *wallet.Wallet, chainClient *hcrpccl
 	}
 
 	itr := uint32(0)
-	rmsoResults := make([]dcrjson.RedeemMultiSigOutResult, len(msos))
+	len := math.Min(float64(max), float64(len(msos)))
+	rmsoResults := make([]dcrjson.RedeemMultiSigOutResult, int(len))
 	for i, mso := range msos {
-		if itr > max {
+		if itr >= max {
 			break
 		}
-
+		fmt.Println("redeemMultiSigOuts outhash:", mso.OutPoint.Hash.String(), mso.Amount)
 		rmsoRequest := &dcrjson.RedeemMultiSigOutCmd{
 			Hash:    mso.OutPoint.Hash.String(),
 			Index:   mso.OutPoint.Index,
@@ -2330,6 +2351,11 @@ func sendToAddress(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 		}
 	}
 
+	account, err := w.AccountNumber(cmd.AccountName)
+	if err != nil {
+		return nil, err
+	}
+
 	amt, err := hcutil.NewAmount(cmd.Amount)
 	if err != nil {
 		return nil, err
@@ -2346,7 +2372,7 @@ func sendToAddress(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 	}
 
 	// sendtoaddress always spends from the default account, this matches bitcoind
-	return sendPairs(w, pairs, udb.DefaultAccountNum, 1)
+	return sendPairs(w, pairs, account, 1)
 }
 
 // getStraightPubKey handles a getStraightPubKey RPC request by getting a straight public key
@@ -2405,7 +2431,12 @@ func getStraightPubKey(icmd interface{}, w *wallet.Wallet, chainClient *hcrpccli
 // TODO Use with non-default accounts as well
 func sendToMultiSig(icmd interface{}, w *wallet.Wallet, chainClient *hcrpcclient.Client) (interface{}, error) {
 	cmd := icmd.(*dcrjson.SendToMultiSigCmd)
-	account := uint32(udb.DefaultAccountNum)
+
+	account, err := w.AccountNumber(cmd.FromAccount)
+	if err != nil {
+		return nil, err
+	}
+
 	amount, err := hcutil.NewAmount(cmd.Amount)
 	if err != nil {
 		return nil, err
@@ -2450,7 +2481,6 @@ func sendToMultiSig(icmd interface{}, w *wallet.Wallet, chainClient *hcrpcclient
 					return nil, err
 				}
 				pubkeys[i] = pubKeyAddr
-				fmt.Println("bliss len:", len(pubKeyAddr.String()))
 			default:
 				return nil, errors.New("only secp256k1 and bliss " +
 					"pubkeys are currently supported")
@@ -3034,7 +3064,10 @@ func validateAddress(icmd interface{}, w *wallet.Wallet) (interface{}, error) {
 		var err error
 
 		result.IsCompressed = ma.Compressed()
+
 		result.PubKey = ma.ExportPubKey()
+		hcutil.DecodeAddress(result.PubKey)
+
 		pubKeyBytes, err = hex.DecodeString(result.PubKey)
 		if err != nil {
 			return nil, err

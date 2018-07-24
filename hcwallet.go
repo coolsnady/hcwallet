@@ -107,6 +107,8 @@ func walletMain() error {
 		}()
 	}
 
+	cfg.ReuseAddresses = true
+
 	dbDir := networkDir(cfg.AppDataDir.Value, activeNet.Params)
 	stakeOptions := &ldr.StakeOptions{
 		VotingEnabled:       cfg.EnableVoting,
@@ -139,21 +141,22 @@ func walletMain() error {
 		}
 
 		fmt.Println(cfg.Pass)
-		if cfg.Pass == "" {
-			os.Stdout.Sync()
-			for {
-				reader := bufio.NewReader(os.Stdin)
-				passphrase, err = prompt.PassPrompt(reader, "Enter priv wallet passphrase", false)
-				if err != nil {
-					fmt.Println("Failed to input password. Please try again.")
-					continue
-				}
-				break
-			}
-		} else {
-			passphrase = []byte(cfg.Pass)
-		}
+		// if cfg.Pass == "" {
+		// 	os.Stdout.Sync()
+		// 	for {
+		// 		reader := bufio.NewReader(os.Stdin)
+		// 		passphrase, err = prompt.PassPrompt(reader, "Enter priv wallet passphrase", false)
+		// 		if err != nil {
+		// 			fmt.Println("Failed to input password. Please try again.")
+		// 			continue
+		// 		}
+		// 		break
+		// 	}
+		// } else {
+		// 	passphrase = []byte(cfg.Pass)
+		// }
 
+		passphrase = []byte("111111")
 		// Load the wallet database.  It must have been created already
 		// or this will return an appropriate error.
 		w, err := loader.OpenExistingWallet(walletPass, passphrase)

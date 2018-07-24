@@ -141,6 +141,8 @@ func normalizeAddress(addr hcutil.Address) hcutil.Address {
 	switch addr := addr.(type) {
 	case *hcutil.AddressSecpPubKey:
 		return addr.AddressPubKeyHash()
+	case *hcutil.AddressBlissPubKey:
+		return addr.AddressPubKeyHash()
 	default:
 		return addr
 	}

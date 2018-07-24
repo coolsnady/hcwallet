@@ -3931,7 +3931,7 @@ func (w *Wallet) SignTransaction(tx *wire.MsgTx, hashType txscript.SigHashType,
 				// that it's not a multisignature underflow, indicating that
 				// we didn't have enough signatures in front of the
 				// redeemScript rather than an actual error.
-				if !multisigNotEnoughSigs {
+				if multisigNotEnoughSigs {
 					signErrors = append(signErrors, SignatureError{
 						InputIndex: uint32(i),
 						Error:      err,
